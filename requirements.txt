@@ -1,0 +1,8 @@
+pandas == 1.4.3
+opencv-python == 4.5.5.64
+numpy == 1.23.1
+pyarrow == 8.0.0
+openpyxl == 3.0.10
+moviepy == 1.0.3
+loguru
+PyYAML
