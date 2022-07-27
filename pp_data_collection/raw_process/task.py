@@ -17,7 +17,7 @@ class Task:
     # RAW_PATTERN example: 20220709/a33/cam/TimestampCamera_20220709_120000.00.mp4
     _RAW_PATTERN = '{root}/{date}/{device_id}/{device_type}/{data_file}'
     # PROCESSED_PATTERN example: mounted_rgb/1/0000_0000_1.mp4
-    _PROCESSED_PATTERN = '{root}/{scenario_id}/{data_type}/{start_ts}_{end_ts}_{subject_id}'
+    _PROCESSED_PATTERN = '{root}/scenario_{scenario_id}/{data_type}/{start_ts}_{end_ts}_{subject_id}'
 
     def __init__(self, config_file: str, log_file: str, raw_folder: str, processed_folder: str):
         """
