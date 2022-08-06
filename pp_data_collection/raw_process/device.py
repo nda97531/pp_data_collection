@@ -201,12 +201,11 @@ class TimerApp(Device):
     """
     An Android app for manual online labelling:
     https://github.com/nda97531/TimerApp
-    Label file is a csv file with columns:
+    Label file is a csv file with columns: label, start, end
+    (start and end are timestamp columns, unit is millisec)
     """
 
     def get_start_end_timestamp(self, path: str) -> tuple:
-        # # label times do not represent start/end times of a session
-        # return -1, int(time.time() * 1000)
         # read first and last line of file
         with open(path) as f:
             assert f.readline().strip().split(',') == TimerAppColumn.to_list()
