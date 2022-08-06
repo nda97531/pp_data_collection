@@ -4,12 +4,14 @@ import numpy as np
 import shutil
 import os
 from datetime import datetime, timezone
+import pandas as pd
 from loguru import logger
 
+from pp_data_collection.utils.compressed_file import unzip_file
 from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_file, write_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
-from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, WatchColumn, TimerAppColumn
+from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn
 from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 
@@ -35,7 +37,7 @@ class Device:
         """
         raise NotImplementedError()
 
-    def trim(self, input_path: str, output_path: str, start_ts: int = None, end_ts: int = None) -> Union[str, None]:
+    def trim(self, input_path: str, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
         """
         Trim a sensor data file at 2 ends.
 
@@ -108,6 +110,7 @@ class TimestampCamera(Device):
     ~30FPS video with a digital clock in every frame.
     The default filename is TimeVideo_%Y%m%d_%H%M%S.mp4,
     please add decimal value of second: TimeVideo_%Y%m%d_%H%M%S.%f.mp4
+    Example name: TimeVideo_20220709_113327.07.mp4
     """
 
     def get_start_end_timestamp(self, path: str) -> tuple:
@@ -120,16 +123,10 @@ class TimestampCamera(Device):
 
         return vid_start_timestamp, vid_end_timestamp
 
-    def trim(self, input_path: str, output_path: str, start_ts: int = None, end_ts: int = None) -> Union[str, None]:
+    def trim(self, input_path: str, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
         output_path = self.check_output_path(output_path)
         if not output_path:
             return None
-
-        # just copy file if both timestamps are not provided
-        if not start_ts and not end_ts:
-            shutil.copy(input_path, output_path)
-            logger.warning('Both start & end timestamps are not provided')
-            return output_path
 
         # get video start time
         vid_start_time = datetime.strptime(os.path.split(input_path)[1], CAMERA_FILENAME_PATTERN)
@@ -165,6 +162,8 @@ class Watch(Device):
         super().__init__(param)
         assert 1000 % self.param['sampling_rate'] == 0, \
             "1000 must be divisible by sampling rate to make sure that timestamp (ms) is an integer"
+        # convert from Hz (sample/s) to sample/ms
+        self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
 
     def get_start_end_timestamp(self, path: str) -> tuple:
         # read first and last line of file
@@ -177,41 +176,22 @@ class Watch(Device):
 
         return start_ts, end_ts
 
-    def trim(self, input_path: str, output_path: str, start_ts: int = None, end_ts: int = None) -> Union[str, None]:
+    def trim(self, input_path: str, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
         output_path = self.check_output_path(output_path)
         if not output_path:
             return None
 
         # read DF
         df = read_df_file(input_path, header=None)
-        df.columns = WatchColumn.to_list()
+        df.columns = InertialColumn.to_list()
 
-        # return if both timestamps are not provided
-        if not start_ts and not end_ts:
-            write_df_file(df, output_path)
-            logger.warning('Both start & end timestamps are not provided')
-            return output_path
-
-        # define trim condition
-        ts_series = df[WatchColumn.TIMESTAMP.value]
-        if start_ts and end_ts:
-            condition = (start_ts <= ts_series) & (ts_series <= end_ts)
-        elif start_ts:
-            condition = start_ts <= ts_series
-        else:
-            condition = ts_series <= end_ts
-
-        # cut dataframe
-        df = df.loc[condition]
-
-        # convert from Hz (sample/s) to sample/ms
-        new_freq = self.param['sampling_rate'] / 1000
         # resample dataframe
-        new_ts = np.arange(np.floor((end_ts - start_ts) * new_freq + 1)) / new_freq + start_ts
+        new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
+                           ) / self.param['sampling_rate'] + start_ts
         new_ts = new_ts.astype(int)
-        df = interpolate_numeric_df(df, timestamp_col=WatchColumn.TIMESTAMP.value, new_timestamp=new_ts)
-        df = df.round(self.param['round_digits'])
-
+        df = interpolate_numeric_df(df, timestamp_col=InertialColumn.TIMESTAMP.value, new_timestamp=new_ts)
+        if self.param['round_digits'] is not None:
+            df = df.round(self.param['round_digits'])
         write_df_file(df, output_path)
         return output_path
 
@@ -238,11 +218,84 @@ class TimerApp(Device):
 
         return start_ts, end_ts
 
-    def trim(self, input_path: str, output_path: str, start_ts: float = None, end_ts: float = None) -> Union[str, None]:
+    def trim(self, input_path: str, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
         output_path = self.check_output_path(output_path)
         if not output_path:
             return None
 
         # do not trim online label file
         shutil.copy(input_path, output_path)
+        return output_path
+
+
+@device_type('sensor_logger')
+class PhoneSensorLogger(Device):
+    """
+    Inertial data recorded by this app: https://www.tszheichoi.com/sensorlogger
+    A folder with name format being: %Y-%m-%d_%H-%M-%S; example name: 2022-08-06_16-27-15. This is in GMT+0 timezone.
+    This folder contains: Gyroscope.csv and TotalAcceleration.csv
+    Both files have the same set of columns: time, seconds_elapsed, z, y, x
+    """
+    RAW_TS_COL = 'time'
+    RAW_DATA_COLS = ['x', 'y', 'z']
+
+    def __init__(self, param: dict):
+        super().__init__(param)
+        assert 1000 % self.param['sampling_rate'] == 0, \
+            "1000 must be divisible by sampling rate to make sure that timestamp (ms) is an integer"
+        # convert from Hz (sample/s) to sample/ms
+        self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
+
+    def get_start_end_timestamp(self, path: str) -> tuple:
+        # extract zip file
+        if path.endswith('.zip') and os.path.isfile(path):
+            path = unzip_file(path, extract_to_name=True, del_zip=True)
+
+        first_ts = -1
+        last_ts = float('inf')
+
+        for filename in ['Gyroscope.csv', 'TotalAcceleration.csv']:
+            filepath = os.sep.join([path, filename])
+            # read first and last line of file
+            with open(filepath) as f:
+                file_first_line = f.readline()
+                assert file_first_line.split(',')[0] == 'time'
+                file_first_line = f.readline()
+            file_last_line = read_last_line(filepath)
+            # extract timestamp, convert from nanosecond to millisecond
+            file_first_millisec = round(int(file_first_line.split(',')[0]) / 1e6)
+            file_last_millisec = round(int(file_last_line.split(',')[0]) / 1e6)
+            # get overlapping range of all modalities
+            first_ts = max(first_ts, file_first_millisec)
+            last_ts = min(last_ts, file_last_millisec)
+        return first_ts, last_ts
+
+    def trim(self, input_path: str, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
+        output_path = self.check_output_path(output_path)
+        if not output_path:
+            return None
+        # extract zip file
+        if input_path.endswith('.zip') and os.path.isfile(input_path):
+            input_path = unzip_file(input_path, extract_to_name=True, del_zip=True)
+
+        # read DF files
+        use_cols = [self.RAW_TS_COL] + self.RAW_DATA_COLS
+        gyro_df = read_df_file(os.sep.join([input_path, 'Gyroscope.csv']), usecols=use_cols)
+        acce_df = read_df_file(os.sep.join([input_path, 'TotalAcceleration.csv']), usecols=use_cols)
+        # convert timestamp nanosec -> millisec
+        gyro_df['time'] = (gyro_df['time'] / 1e6).round()
+        acce_df['time'] = (acce_df['time'] / 1e6).round()
+
+        # interpolate
+        new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
+                           ) / self.param['sampling_rate'] + start_ts
+        new_ts = new_ts.astype(int)
+        gyro_df = interpolate_numeric_df(gyro_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
+        acce_df = interpolate_numeric_df(acce_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
+
+        # concat gyro and acce
+        df = pd.concat([acce_df, gyro_df[self.RAW_DATA_COLS]], axis=1, ignore_index=True)
+        df.columns = InertialColumn.to_list()
+
+        write_df_file(df, output_path)
         return output_path

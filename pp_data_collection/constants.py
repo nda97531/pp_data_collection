@@ -3,7 +3,10 @@ from enum import Enum
 CAMERA_FILENAME_PATTERN = 'TimeVideo_%Y%m%d_%H%M%S.%f.mp4'
 
 
-class WatchColumn(Enum):
+class InertialColumn(Enum):
+    """
+    Columns of a processed inertial DF
+    """
     TIMESTAMP = 'timestamp'
     ACC_X = 'acc_x'
     ACC_Y = 'acc_y'
@@ -14,10 +17,13 @@ class WatchColumn(Enum):
 
     @staticmethod
     def to_list():
-        return [item.value for item in WatchColumn]
+        return [item.value for item in InertialColumn]
 
 
 class TimerAppColumn(Enum):
+    """
+    Columns of a raw/processed TimerApp DF
+    """
     LABEL = 'label'
     START_TIMESTAMP = 'start'
     END_TIMESTAMP = 'end'
@@ -28,6 +34,9 @@ class TimerAppColumn(Enum):
 
 
 class LogColumn(Enum):
+    """
+    Columns of a raw data collection log DF
+    """
     SESSION = 'Session'
     SCENARIO = 'Scenario'
     DATE = 'Date'
@@ -48,6 +57,9 @@ class LogColumn(Enum):
 
 
 class LogSheet(Enum):
+    """
+    Sheets of a raw data collection log Excel file
+    """
     SESSION = 'Session'
     SUBJECT = 'Subject'
 

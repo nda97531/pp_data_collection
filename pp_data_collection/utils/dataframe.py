@@ -52,6 +52,16 @@ def write_df_file(df: pd.DataFrame, path: str, columns: list = None, **kwargs) -
 
 
 def interpolate_numeric_df(df: pd.DataFrame, timestamp_col: str, new_timestamp: np.ndarray) -> pd.DataFrame:
+    """
+    Interpolate a DF linearly.
+    Args:
+        df: input DF
+        timestamp_col: timestamp column name in the DF
+        new_timestamp: array of evaluated timestamps
+
+    Returns:
+        an interpolated DF
+    """
     cols_except_ts = df.columns.to_list()
     cols_except_ts.remove(timestamp_col)
 

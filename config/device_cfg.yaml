@@ -3,6 +3,11 @@ watch:
   round_digits: 4 # all sensor values are rounded to this number of decimal digits after interpolation
   output_format: '.parquet'
 
+sensor_logger:
+  sampling_rate: 100 # Hz, resample to this frequency by interpolation
+  round_digits: null # all sensor values are rounded to this number of decimal digits after interpolation
+  output_format: '.parquet'
+
 cam:
   data_timezone: 7 # time zone in video filename
   output_format: '.mp4'
