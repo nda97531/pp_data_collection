@@ -5,20 +5,15 @@ from glob import glob
 import pandas as pd
 from datetime import datetime
 from loguru import logger
-import yaml
 
-from pp_data_collection.constants import LogColumn, LogSheet
-from pp_data_collection.raw_process.device import Device
+from pp_data_collection.constants import LogColumn, LogSheet, PROCESSED_PATTERN, RAW_PATTERN
+from pp_data_collection.raw_process.config import DeviceConfig
+from pp_data_collection.raw_process.recording_device import RecordingDevice
 from pp_data_collection.utils.dataframe import read_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 
 
 class Task:
-    # RAW_PATTERN example: 20220709/a33/cam/TimestampCamera_20220709_120000.00.mp4
-    _RAW_PATTERN = '{root}/{date}/{device_id}/{device_type}/{data_file}'
-    # PROCESSED_PATTERN example: mounted_rgb/1/0000_0000_1.mp4
-    _PROCESSED_PATTERN = '{root}/scenario_{scenario_id}/{data_type}/{start_ts}_{end_ts}_{subject_id}'
-
     def __init__(self, config_file: str, log_file: str, raw_folder: str, processed_folder: str):
         """
         A class for raw data handling:
@@ -36,17 +31,21 @@ class Task:
         self.raw_folder = raw_folder
         self.processed_folder = processed_folder
 
+        # read config
+        config = DeviceConfig(config_file).cfg
+
         # initialise sensor objects
-        with open(config_file, 'r') as F:
-            config = yaml.safe_load(F)
-        self.sensor_objects: Dict[str, Device] = {
-            sensor_type: Device.get_sensor_class(sensor_type)(sensor_param)
+        self.sensor_objects: Dict[str, RecordingDevice] = {
+            sensor_type: RecordingDevice.get_sensor_class(sensor_type)(sensor_param)
             for sensor_type, sensor_param in config.items()
         }
 
-    def get_all_start_end_timestamps(self) -> Dict[str, Tuple[int, int]]:
+    def get_all_start_end_timestamps(self, log_df: pd.DataFrame) -> Dict[str, Tuple[int, int]]:
         """
         Get start and end timestamp (msec) of all data files
+
+        Args:
+            log_df: collection log dataframe following format in LogColumn
 
         Returns:
             a dictionary,
@@ -54,12 +53,16 @@ class Task:
                 value - a tuple of 2 elements (start timestamp, end timestamp)
         """
         # read start & end timestamps of all data files
-        data_files = glob(
-            self._RAW_PATTERN.format(root=self.raw_folder, date='*', device_id='*', device_type='*', data_file='*'))
+        list_date = [d.replace('/', '') for d in np.unique(log_df[LogColumn.DATE.value])]
+        data_files = []
+        for date in list_date:
+            data_files += glob(
+                RAW_PATTERN.format(root=self.raw_folder, date=date, device_id='*', device_type='*', data_file='*')
+            )
         all_start_end_tss = {}
         for data_file in data_files:
             sensor_type = data_file.split(os.sep)[-2]
-            if sensor_type in Device.__sub_sensor_names__:
+            if sensor_type in RecordingDevice.__sub_sensor_names__:
                 all_start_end_tss[data_file] = self.sensor_objects[sensor_type].get_start_end_timestamp(data_file)
         return all_start_end_tss
 
@@ -68,7 +71,7 @@ class Task:
         This method finds all data files (of all devices and data types) in a session.
 
         Args:
-            log_df_row: a row of a session from log file (log file columns are in pp_data_collection.constants.LogColumn)
+            log_df_row: a row of a session in log file (log file columns are in pp_data_collection.constants.LogColumn)
             all_files_start_end_tss: a dictionary with
                 key - absolute path to data file;
                 value - a tuple of 2 elements (start timestamp, end timestamp)
@@ -82,7 +85,7 @@ class Task:
             LogColumn.START_TIME.value,
             LogColumn.END_TIME.value
         ]]
-        log_start_ts = datetime_2_timestamp(datetime.strptime(f'{date} {start_time}', '%Y/%m/%d %H:%M'))
+        log_start_ts = datetime_2_timestamp(datetime.strptime(f'{date} {start_time}', '%Y/%m/%d %H:%M:%S'))
 
         result_df = []
         # for each sensor in a session
@@ -95,8 +98,8 @@ class Task:
 
             # find data file belonging to this session
             # get paths to data files
-            pattern = self._RAW_PATTERN.format(root=self.raw_folder, date=date.replace('/', ''), device_id=device_id,
-                                               device_type=device_type, data_file='*')
+            pattern = RAW_PATTERN.format(root=self.raw_folder, date=date.replace('/', ''), device_id=device_id,
+                                         device_type=device_type, data_file='*')
             file_paths = glob(pattern)
             # get start and end times of data files
             sensor_start_end_tss = np.array([all_files_start_end_tss[path] for path in file_paths])
@@ -130,12 +133,12 @@ class Task:
         session_end_ts = session_df['end_ts'].min()
 
         for _, (device_type, data_type, file_path) in session_df[['device_type', 'data_type', 'file_path']].iterrows():
-            output_path = self._PROCESSED_PATTERN.format(root=self.processed_folder,
-                                                         scenario_id=scenario_id,
-                                                         data_type=data_type,
-                                                         start_ts=session_start_ts,
-                                                         end_ts=session_end_ts,
-                                                         subject_id=subject_id)
+            output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
+                                                   scenario_id=scenario_id,
+                                                   data_type=data_type,
+                                                   start_ts=session_start_ts,
+                                                   end_ts=session_end_ts,
+                                                   subject_id=subject_id)
             os.makedirs(os.path.split(output_path)[0], exist_ok=True)
             trimmed_path = self.sensor_objects[device_type].trim(
                 input_path=file_path,
@@ -161,15 +164,15 @@ class Task:
         logger.info(f"Read data collection log file, number of sessions: {len(log_df)}")
 
         # get start and end timestamps of all data files
-        all_files_start_end_tss = self.get_all_start_end_timestamps()
+        all_files_start_end_tss = self.get_all_start_end_timestamps(log_df)
         logger.info(f"Get start & end timestamps of all data files, number of files: {len(all_files_start_end_tss)}")
 
         data_files_processed = []
         # for each session
-        for _, row in log_df.iterrows():
-            logger.info(f"Session {row.at[LogColumn.SESSION.value]}")
+        for row_name, row in log_df.iterrows():
+            logger.info(f"Row {row_name}")
             # get info of this session
-            scenario_id = row.at[LogColumn.SCENARIO.value]
+            scenario_id = row.at[LogColumn.SETUP.value]
             subject_id = row.at[LogColumn.SUBJECT.value]
 
             # find all data files of this session

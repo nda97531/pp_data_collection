@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import pandas as pd
 from loguru import logger
 
-from pp_data_collection.utils.compressed_file import unzip_file
 from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_file, write_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
@@ -16,7 +15,7 @@ from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 
 
-class Device:
+class RecordingDevice:
     __sub_sensor_names__ = {}
 
     def __init__(self, param: dict):
@@ -72,7 +71,7 @@ class Device:
         return output_path
 
     @staticmethod
-    def get_sensor_class(sensor_type: str) -> Type[Device]:
+    def get_sensor_class(sensor_type: str) -> Type[RecordingDevice]:
         """
         Get a sensor class
 
@@ -82,7 +81,7 @@ class Device:
         Returns:
             subclass
         """
-        return Device.__sub_sensor_names__[sensor_type]
+        return RecordingDevice.__sub_sensor_names__[sensor_type]
 
 
 def device_type(sensor_type: str):
@@ -92,18 +91,18 @@ def device_type(sensor_type: str):
     Args:
         sensor_type: a unique name
     """
-    if sensor_type in Device.__sub_sensor_names__:
+    if sensor_type in RecordingDevice.__sub_sensor_names__:
         raise ValueError(f'Duplicate sensor name: {sensor_type}')
 
     def name_sensor_obj(obj):
-        Device.__sub_sensor_names__[sensor_type] = obj
+        RecordingDevice.__sub_sensor_names__[sensor_type] = obj
         return obj
 
     return name_sensor_obj
 
 
 @device_type('cam')
-class TimestampCamera(Device):
+class TimestampCamera(RecordingDevice):
     """
     Video recorded by Timestamp Camera app:
     https://play.google.com/store/apps/details?id=com.jeyluta.timestampcamerafree
@@ -146,7 +145,7 @@ class TimestampCamera(Device):
 
 
 @device_type('watch')
-class Watch(Device):
+class Watch(RecordingDevice):
     """
     Watch with built-in 6-axis IMU. A data file is a csv file with no header. Columns are:
         timestamp (ms)
@@ -197,7 +196,7 @@ class Watch(Device):
 
 
 @device_type('timerapp')
-class TimerApp(Device):
+class TimerApp(RecordingDevice):
     """
     An Android app for manual online labelling:
     https://github.com/nda97531/TimerApp
@@ -208,7 +207,9 @@ class TimerApp(Device):
     def get_start_end_timestamp(self, path: str) -> tuple:
         # read first and last line of file
         with open(path) as f:
-            assert f.readline().strip().split(',') == TimerAppColumn.to_list()
+            first_line = f.readline().strip().replace('"', '').replace("'", '').split(',')
+            col_list = TimerAppColumn.to_list()
+            assert first_line == col_list
             first_line = f.readline()
         last_line = read_last_line(path)
         # extract timestamps
@@ -227,8 +228,8 @@ class TimerApp(Device):
         return output_path
 
 
-@device_type('sensor_logger')
-class PhoneSensorLogger(Device):
+@device_type('sensorlogger')
+class PhoneSensorLogger(RecordingDevice):
     """
     Inertial data recorded by this app: https://www.tszheichoi.com/sensorlogger
     A folder with name format being: %Y-%m-%d_%H-%M-%S; example name: 2022-08-06_16-27-15. This is in GMT+0 timezone.
@@ -237,6 +238,9 @@ class PhoneSensorLogger(Device):
     """
     RAW_TS_COL = 'time'
     RAW_DATA_COLS = ['x', 'y', 'z']
+    GRAVITY_FILENAME = 'Gravity.csv'
+    ACCE_FILENAME = 'Accelerometer.csv'
+    GYRO_FILENAME = 'Gyroscope.csv'
 
     def __init__(self, param: dict):
         super().__init__(param)
@@ -246,19 +250,15 @@ class PhoneSensorLogger(Device):
         self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
 
     def get_start_end_timestamp(self, path: str) -> tuple:
-        # extract zip file
-        if path.endswith('.zip') and os.path.isfile(path):
-            path = unzip_file(path, extract_to_name=True, del_zip=True)
-
         first_ts = -1
         last_ts = float('inf')
 
-        for filename in ['Gyroscope.csv', 'TotalAcceleration.csv']:
+        for filename in [self.GYRO_FILENAME, self.ACCE_FILENAME]:
             filepath = os.sep.join([path, filename])
             # read first and last line of file
             with open(filepath) as f:
                 file_first_line = f.readline()
-                assert file_first_line.split(',')[0] == 'time'
+                assert file_first_line.split(',')[0] == self.RAW_TS_COL
                 file_first_line = f.readline()
             file_last_line = read_last_line(filepath)
             # extract timestamp, convert from nanosecond to millisecond
@@ -273,24 +273,29 @@ class PhoneSensorLogger(Device):
         output_path = self.check_output_path(output_path)
         if not output_path:
             return None
-        # extract zip file
-        if input_path.endswith('.zip') and os.path.isfile(input_path):
-            input_path = unzip_file(input_path, extract_to_name=True, del_zip=True)
 
         # read DF files
         use_cols = [self.RAW_TS_COL] + self.RAW_DATA_COLS
-        gyro_df = read_df_file(os.sep.join([input_path, 'Gyroscope.csv']), usecols=use_cols)
-        acce_df = read_df_file(os.sep.join([input_path, 'TotalAcceleration.csv']), usecols=use_cols)
+        gyro_df = read_df_file(os.sep.join([input_path, self.GYRO_FILENAME]), usecols=use_cols)
+        acce_df = read_df_file(os.sep.join([input_path, self.ACCE_FILENAME]), usecols=use_cols)
+        gravity_df = read_df_file(os.sep.join([input_path, self.GRAVITY_FILENAME]), usecols=use_cols)
+        gyro_ts = gyro_df[self.RAW_TS_COL]
+        acce_ts = acce_df[self.RAW_TS_COL]
+        # add gravity to acceleration
+        assert acce_ts.equals(gravity_df[self.RAW_TS_COL]), "Accelerometer and Gravity timestamps mismatched"
+        acce_df[self.RAW_DATA_COLS] += gravity_df[self.RAW_DATA_COLS]
+        del gravity_df
         # convert timestamp nanosec -> millisec
-        gyro_df['time'] = (gyro_df['time'] / 1e6).round()
-        acce_df['time'] = (acce_df['time'] / 1e6).round()
+        gyro_df[self.RAW_TS_COL] = (gyro_ts / 1e6).round()
+        acce_df[self.RAW_TS_COL] = (acce_ts / 1e6).round()
 
-        # interpolate
-        new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
-                           ) / self.param['sampling_rate'] + start_ts
-        new_ts = new_ts.astype(int)
-        gyro_df = interpolate_numeric_df(gyro_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
-        acce_df = interpolate_numeric_df(acce_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
+        if not gyro_ts.equals(acce_ts):
+            # interpolate
+            new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
+                               ) / self.param['sampling_rate'] + start_ts
+            new_ts = new_ts.astype(int)
+            gyro_df = interpolate_numeric_df(gyro_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
+            acce_df = interpolate_numeric_df(acce_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
 
         # concat gyro and acce
         df = pd.concat([acce_df, gyro_df[self.RAW_DATA_COLS]], axis=1, ignore_index=True)
