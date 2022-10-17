@@ -301,5 +301,13 @@ class PhoneSensorLogger(RecordingDevice):
         df = pd.concat([acce_df, gyro_df[self.RAW_DATA_COLS]], axis=1, ignore_index=True)
         df.columns = InertialColumn.to_list()
 
+        # resample dataframe
+        new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
+                           ) / self.param['sampling_rate'] + start_ts
+        new_ts = new_ts.astype(int)
+        df = interpolate_numeric_df(df, timestamp_col=InertialColumn.TIMESTAMP.value, new_timestamp=new_ts)
+        if self.param['round_digits'] is not None:
+            df = df.round(self.param['round_digits'])
+
         write_df_file(df, output_path)
         return output_path

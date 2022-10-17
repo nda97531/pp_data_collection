@@ -5,7 +5,7 @@ watch:
 
 sensorlogger:
   sampling_rate: 100 # Hz, resample to this frequency by interpolation
-  round_digits: null # all sensor values are rounded to this number of decimal digits after interpolation
+  round_digits: 4 # all sensor values are rounded to this number of decimal digits after interpolation
   output_format: '.parquet'
 
 cam:

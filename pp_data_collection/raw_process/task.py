@@ -14,7 +14,7 @@ from pp_data_collection.utils.time import datetime_2_timestamp
 
 
 class Task:
-    def __init__(self, config_file: str, log_file: str, raw_folder: str, processed_folder: str):
+    def __init__(self, config_file: str, log_file: str, raw_data_folder: str, processed_data_folder: str):
         """
         A class for raw data handling:
             - process raw data (if applicable)
@@ -24,12 +24,12 @@ class Task:
         Args:
             config_file: path to config yaml file
             log_file: path to the data collection log file (excel)
-            raw_folder: folder containing raw data from recording devices
-            processed_folder: folder to saved processed data
+            raw_data_folder: folder containing raw data from recording devices
+            processed_data_folder: folder to saved processed data
         """
         self.log_file = log_file
-        self.raw_folder = raw_folder
-        self.processed_folder = processed_folder
+        self.raw_folder = raw_data_folder
+        self.processed_folder = processed_data_folder
 
         # read config
         config = DeviceConfig(config_file).cfg
@@ -170,7 +170,7 @@ class Task:
         data_files_processed = []
         # for each session
         for row_name, row in log_df.iterrows():
-            logger.info(f"Row {row_name}")
+            logger.info(f"Processing row {row_name} of log file")
             # get info of this session
             scenario_id = row.at[LogColumn.SETUP.value]
             subject_id = row.at[LogColumn.SUBJECT.value]
