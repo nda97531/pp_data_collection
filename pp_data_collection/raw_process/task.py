@@ -87,7 +87,10 @@ class Task:
             LogColumn.START_TIME.value,
             LogColumn.END_TIME.value
         ]]
-        log_start_ts = datetime_2_timestamp(datetime.strptime(f'{date} {start_time}', '%Y/%m/%d %H:%M:%S'))
+        log_start_end_ts = np.array([
+            datetime_2_timestamp(datetime.strptime(f'{date} {start_time}', '%Y/%m/%d %H:%M:%S')),
+            datetime_2_timestamp(datetime.strptime(f'{date} {end_time}', '%Y/%m/%d %H:%M:%S'))
+        ]).reshape([1, 2])
 
         result_df = []
         # for each sensor in a session
@@ -104,9 +107,10 @@ class Task:
                                          device_type=device_type, data_file='*')
             file_paths = glob(pattern)
             # get start and end times of data files
+            # numpy array shape [number of files, 2(start ts, end ts)]
             sensor_start_end_tss = np.array([all_files_start_end_tss[path] for path in file_paths])
             # find which file belongs to this session
-            sensor_idx = np.abs(sensor_start_end_tss[:, 0] - log_start_ts)
+            sensor_idx = np.abs(sensor_start_end_tss - log_start_end_ts).sum(axis=1)
             sensor_idx = np.argmin(sensor_idx)
 
             result_df.append({

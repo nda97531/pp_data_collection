@@ -6,8 +6,8 @@ from pp_data_collection.utils.compressed_file import unzip_file
 
 if __name__ == '__main__':
     pattern = RAW_PATTERN.format(
-        root='/mnt/data_drive/projects/UCD01 - Privacy preserving data collection/data/pilot2/raw',
-        date='20221012',
+        root='/mnt/data_drive/projects/UCD01 - Privacy preserving data collection/data/batch3/raw',
+        date='*',
         device_id='*',
         device_type='sensorlogger',
         data_file='*.zip'
