@@ -30,6 +30,8 @@ class Task:
         self.log_file = log_file
         self.raw_folder = raw_data_folder
         self.processed_folder = processed_data_folder
+        # column name to add to log df, this represents ordinal number of collection day of each subject
+        self.ITH_DAY = 'ith_day'
 
         # read config
         config = DeviceConfig(config_file).cfg
@@ -97,7 +99,7 @@ class Task:
             data_type, device_type = col_name.split(' ')
 
             # find data file belonging to this session
-            # get paths to data files
+            # get paths to data files that have the required device ID, device type and collection date
             pattern = RAW_PATTERN.format(root=self.raw_folder, date=date.replace('/', ''), device_id=device_id,
                                          device_type=device_type, data_file='*')
             file_paths = glob(pattern)
@@ -118,7 +120,8 @@ class Task:
         result_df = pd.DataFrame.from_records(result_df)
         return result_df
 
-    def trim_data_files_of_session(self, session_df: pd.DataFrame, scenario_id: any, subject_id: any) -> None:
+    def trim_data_files_of_session(self, session_df: pd.DataFrame, scenario_id: any, subject_id: any,
+                                   ith_day: int) -> None:
         """
         Trim raw data files and save to the destination paths
 
@@ -127,6 +130,7 @@ class Task:
                 columns are [device_type, data_type, start_ts, end_ts, file_path]
             scenario_id: scenario ID to use as folder name in the destination paths
             subject_id: subject ID to use as folder name in the destination paths
+            ith_day: ordinal number of collection day of this subject
         """
         # find sensors intersection range
         session_start_ts = session_df['start_ts'].max()
@@ -138,7 +142,8 @@ class Task:
                                                    data_type=data_type,
                                                    start_ts=session_start_ts,
                                                    end_ts=session_end_ts,
-                                                   subject_id=subject_id)
+                                                   subject_id=subject_id,
+                                                   ith_day=ith_day)
             os.makedirs(os.path.split(output_path)[0], exist_ok=True)
             trimmed_path = self.sensor_objects[device_type].trim(
                 input_path=file_path,
@@ -151,6 +156,25 @@ class Task:
             else:
                 logger.info(f'File is not processed: {file_path}')
 
+    def count_day_subject(self, log_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add a column showing ordinal number of collection day of each subject.
+
+        Args:
+            log_df: collection log dataframe following format in LogColumn
+
+        Returns:
+            the same dataframe with an added column "ith_day"
+        """
+
+        def apply_func(df: pd.DataFrame) -> pd.DataFrame:
+            df[self.ITH_DAY] = df[LogColumn.DATE.value].rank(method='dense').astype(int)
+            return df
+
+        log_df = log_df.groupby(LogColumn.SUBJECT.value)
+        log_df = log_df.apply(apply_func)
+        return log_df
+
     def run(self) -> None:
         """
         Main method to run the pipeline
@@ -161,6 +185,8 @@ class Task:
             usecols=LogColumn.to_list(),
             sheet_name=LogSheet.SESSION.value
         )
+        # add ordinal number of collection day for each subject
+        log_df = self.count_day_subject(log_df)
         logger.info(f"Read data collection log file, number of sessions: {len(log_df)}")
 
         # get start and end timestamps of all data files
@@ -174,6 +200,7 @@ class Task:
             # get info of this session
             scenario_id = row.at[LogColumn.SETUP.value]
             subject_id = row.at[LogColumn.SUBJECT.value]
+            ith_day = row.at[self.ITH_DAY]
 
             # find all data files of this session
             session_df = self.find_data_files_of_session(row, all_files_start_end_tss)
@@ -181,9 +208,9 @@ class Task:
             logger.info(f"Processing {len(session_df)} files of this session")
 
             # trim data files
-            self.trim_data_files_of_session(session_df, scenario_id, subject_id)
+            self.trim_data_files_of_session(session_df, scenario_id, subject_id, ith_day)
 
-        # just double check
+        # just double check if all found files have been processed
         data_files_processed = set(data_files_processed)
         data_files_found = set(all_files_start_end_tss.keys())
         assert data_files_found == data_files_processed, f"Mismatched files: {data_files_found - data_files_processed}"

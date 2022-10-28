@@ -3,7 +3,7 @@ from enum import Enum
 # RAW_PATTERN example: 20220709/a33/cam/TimestampCamera_20220709_120000.00.mp4
 RAW_PATTERN = '{root}/{date}/{device_id}/{device_type}/{data_file}'
 # PROCESSED_PATTERN example: mounted_rgb/1/0000_0000_1.mp4
-PROCESSED_PATTERN = '{root}/scenario_{scenario_id}/{data_type}/{start_ts}_{end_ts}_{subject_id}'
+PROCESSED_PATTERN = '{root}/scenario_{scenario_id}/{data_type}/{start_ts}_{end_ts}_{subject_id}_{ith_day}'
 
 CAMERA_FILENAME_PATTERN = 'TimeVideo_%Y%m%d_%H%M%S.%f.mp4'
 
