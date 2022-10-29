@@ -44,7 +44,7 @@ class Task:
 
     def get_all_start_end_timestamps(self, log_df: pd.DataFrame) -> Dict[str, Tuple[int, int]]:
         """
-        Get start and end timestamp (msec) of all data files
+        Get start and end timestamp (msec) after offset of all data files
 
         Args:
             log_df: collection log dataframe following format in LogColumn
@@ -54,18 +54,23 @@ class Task:
                 key - absolute path to data file;
                 value - a tuple of 2 elements (start timestamp, end timestamp)
         """
-        # read start & end timestamps of all data files
+        # find all data files using information in log_df
         list_date = [d.replace('/', '') for d in np.unique(log_df[LogColumn.DATE.value])]
         data_files = []
         for date in list_date:
             data_files += glob(
                 RAW_PATTERN.format(root=self.raw_folder, date=date, device_id='*', device_type='*', data_file='*')
             )
+        # read timestamps of all data files
         all_start_end_tss = {}
+        # for each file
         for data_file in data_files:
+            # get its sensor type name
             sensor_type = data_file.split(os.sep)[-2]
             if sensor_type in RecordingDevice.__sub_sensor_names__:
-                all_start_end_tss[data_file] = self.sensor_objects[sensor_type].get_start_end_timestamp(data_file)
+                # get start and end timestamps with offset added
+                all_start_end_tss[data_file] = self.sensor_objects[sensor_type].get_start_end_timestamp_w_offset(
+                    data_file)
         return all_start_end_tss
 
     def find_data_files_of_session(self, log_df_row: pd.Series, all_files_start_end_tss: dict) -> pd.DataFrame:
@@ -79,7 +84,7 @@ class Task:
                 value - a tuple of 2 elements (start timestamp, end timestamp)
 
         Returns:
-            a DF with columns [device_type, data_type, start_ts, end_ts, file_path]
+            a DF with columns [device_type, data_type, start_ts, end_ts, file_path], time columns are after offset
         """
         # get session info
         date, start_time, end_time = log_df_row.loc[[
@@ -149,7 +154,7 @@ class Task:
                                                    subject_id=subject_id,
                                                    ith_day=ith_day)
             os.makedirs(os.path.split(output_path)[0], exist_ok=True)
-            trimmed_path = self.sensor_objects[device_type].trim(
+            trimmed_path = self.sensor_objects[device_type].trim_raw(
                 input_path=file_path,
                 output_path=output_path,
                 start_ts=session_start_ts,
