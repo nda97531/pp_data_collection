@@ -34,7 +34,7 @@ class Task:
         self.ITH_DAY = 'ith_day'
 
         # read config
-        config = DeviceConfig(config_file).cfg
+        config = DeviceConfig(config_file).load()
 
         # initialise sensor objects
         self.sensor_objects: Dict[str, RecordingDevice] = {

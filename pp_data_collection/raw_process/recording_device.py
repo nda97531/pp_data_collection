@@ -10,7 +10,7 @@ from loguru import logger
 from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_file, write_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
-from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn
+from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst
 from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 
@@ -25,6 +25,21 @@ class RecordingDevice:
         self.param = param
 
     def get_start_end_timestamp(self, path: str) -> tuple:
+        """
+        Get start & end time of a sensor data file
+
+        Args:
+            path: path to file
+
+        Returns:
+            a tuple of 2 elements: start timestamp, end timestamp (unit: millisecond)
+        """
+        start_ts, end_ts = self._read_start_end_timestamp_from_raw_data(path)
+        start_ts += self.param['msec_offset']
+        end_ts += self.param['msec_offset']
+        return start_ts, end_ts
+
+    def _read_start_end_timestamp_from_raw_data(self, path: str) -> tuple:
         """
         Get start & end time of a sensor data file
 
@@ -73,7 +88,7 @@ class RecordingDevice:
     @staticmethod
     def get_sensor_class(sensor_type: str) -> Type[RecordingDevice]:
         """
-        Get a sensor class
+        Get a specific sensor class
 
         Args:
             sensor_type: sensor type assigned to each sensor by decorator `device_type`
@@ -112,7 +127,7 @@ class TimestampCamera(RecordingDevice):
     Example name: TimeVideo_20220709_113327.07.mp4
     """
 
-    def get_start_end_timestamp(self, path: str) -> tuple:
+    def _read_start_end_timestamp_from_raw_data(self, path: str) -> tuple:
         # get video start time
         vid_start_datetime = datetime.strptime(os.path.split(path)[1], CAMERA_FILENAME_PATTERN)
         vid_start_timestamp = datetime_2_timestamp(vid_start_datetime, tz=self.param['data_timezone'])
@@ -164,7 +179,7 @@ class Watch(RecordingDevice):
         # convert from Hz (sample/s) to sample/ms
         self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
 
-    def get_start_end_timestamp(self, path: str) -> tuple:
+    def _read_start_end_timestamp_from_raw_data(self, path: str) -> tuple:
         # read first and last line of file
         with open(path) as f:
             first_line = f.readline()
@@ -204,7 +219,7 @@ class TimerApp(RecordingDevice):
     (start and end are timestamp columns, unit is millisec)
     """
 
-    def get_start_end_timestamp(self, path: str) -> tuple:
+    def _read_start_end_timestamp_from_raw_data(self, path: str) -> tuple:
         # read first and last line of file
         with open(path) as f:
             first_line = f.readline().strip().replace('"', '').replace("'", '').split(',')
@@ -236,11 +251,6 @@ class PhoneSensorLogger(RecordingDevice):
     This folder contains: Gyroscope.csv and TotalAcceleration.csv
     Both files have the same set of columns: time, seconds_elapsed, z, y, x
     """
-    RAW_TS_COL = 'time'
-    RAW_DATA_COLS = ['x', 'y', 'z']
-    GRAVITY_FILENAME = 'Gravity.csv'
-    ACCE_FILENAME = 'Accelerometer.csv'
-    GYRO_FILENAME = 'Gyroscope.csv'
 
     def __init__(self, param: dict):
         super().__init__(param)
@@ -249,7 +259,13 @@ class PhoneSensorLogger(RecordingDevice):
         # convert from Hz (sample/s) to sample/ms
         self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
 
-    def get_start_end_timestamp(self, path: str) -> tuple:
+        self.RAW_TS_COL: str = SensorLoggerConst.RAW_TS_COL.value
+        self.RAW_DATA_COLS: list = SensorLoggerConst.RAW_DATA_COLS.value
+        self.GRAVITY_FILENAME = SensorLoggerConst.GRAVITY_FILENAME.value
+        self.ACCE_FILENAME = SensorLoggerConst.ACCE_FILENAME.value
+        self.GYRO_FILENAME = SensorLoggerConst.GYRO_FILENAME.value
+
+    def _read_start_end_timestamp_from_raw_data(self, path: str) -> tuple:
         first_ts = -1
         last_ts = float('inf')
 

@@ -25,6 +25,17 @@ class InertialColumn(Enum):
         return [item.value for item in InertialColumn]
 
 
+class SensorLoggerConst(Enum):
+    """
+    Column and file names, raw output of SensorLogger app
+    """
+    RAW_TS_COL = 'time'
+    RAW_DATA_COLS = ['x', 'y', 'z']
+    GRAVITY_FILENAME = 'Gravity.csv'
+    ACCE_FILENAME = 'Accelerometer.csv'
+    GYRO_FILENAME = 'Gyroscope.csv'
+
+
 class TimerAppColumn(Enum):
     """
     Columns of a raw/processed TimerApp DF

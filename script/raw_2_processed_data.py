@@ -1,3 +1,9 @@
+"""
+This script:
+- processes raw data (if applicable)
+- trims all data files so that files of the same session have the same start & end timestamps
+- copies data files to an organised destination
+"""
 from pp_data_collection.raw_process.task import Task
 
 if __name__ == '__main__':
