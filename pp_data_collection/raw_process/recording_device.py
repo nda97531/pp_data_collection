@@ -33,6 +33,7 @@ class RecordingDevice:
             a tuple of 2 elements: start timestamp, end timestamp (unit: millisecond)
         """
         start_ts, end_ts = self._get_start_end_timestamp_wo_offset(path)
+        logger.info(f'Offset for {path} is: {self.param[CFG_OFFSET]} msec')
         if self.param[CFG_OFFSET] != 0:
             start_ts += self.param[CFG_OFFSET]
             end_ts += self.param[CFG_OFFSET]

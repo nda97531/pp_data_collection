@@ -18,6 +18,23 @@ def datetime_2_timestamp(dt: datetime, tz: int = 7) -> int:
     return round(timestamp * 1000)
 
 
+def str_2_timestamp(str_time: str, str_format: str = '%Y/%m/%d %H:%M:%S', tz: int = 7) -> int:
+    """
+    Convert datetime as string to timestamp (msec)
+
+    Args:
+        str_time: string of datetime value
+        str_format: datetime string format, default is 'yyyy/mm/dd HH:MM:SS'
+        tz: timezone of string value
+
+    Returns:
+        timestamp in millisecond
+    """
+    dt = datetime.strptime(str_time, str_format)
+    ts = datetime_2_timestamp(dt, tz)
+    return ts
+
+
 def timestamp_2_datetime(timestamp: int, tz: int = 7) -> datetime:
     """
     Convert timestamp (millisecond) to a datetime object
@@ -30,6 +47,23 @@ def timestamp_2_datetime(timestamp: int, tz: int = 7) -> datetime:
         a datetime object
     """
     return datetime.utcfromtimestamp(timestamp / 1000 + tz * 3600)
+
+
+def timestamp_2_str(timestamp: int, str_format: str = '%Y/%m/%d %H:%M:%S', tz: int = 7) -> str:
+    """
+    Convert timestamp (msec) to string datetime
+
+    Args:
+        timestamp: timestamp in millisecond
+        str_format: format of the output string, default is 'yyyy/mm/dd HH:MM:SS'
+        tz: timezone of the output string datetime
+
+    Returns:
+        string datetime
+    """
+    dt = timestamp_2_datetime(timestamp, tz)
+    str_time = dt.strftime(str_format)
+    return str_time
 
 
 class TimeThis:
