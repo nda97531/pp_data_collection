@@ -18,16 +18,17 @@ class Task:
                  processed_data_folder: str):
         """
         A class for raw data handling:
-            - process raw data (if applicable)
+            - pre-process raw data (if applicable)
+            - apply time offset so clocks of all devices are synchronised
             - trim all data files so that files of the same session have the same start & end timestamps
             - copy data files to an organised destination
 
         Args:
             config_file: path to config yaml file
             log_file: path to the data collection log file (excel)
-            data_timezone: timezone of all datetime in data and log, if it is not in timestamp yet
-            raw_data_folder: folder containing raw data from recording devices
-            processed_data_folder: folder to saved processed data
+            data_timezone: timezone of all datetime values in data and log
+            raw_data_folder: folder containing raw data from recording devices, see RAW_PATTERN for more details
+            processed_data_folder: folder to save processed data
         """
         self.log_file = log_file
         self.raw_folder = raw_data_folder
@@ -49,7 +50,7 @@ class Task:
     def get_all_start_end_timestamps(self, log_df: pd.DataFrame,
                                      day_offset_dict: dict) -> Dict[str, Tuple[int, int]]:
         """
-        Get start and end timestamp (msec) after offset of all data files
+        Get start and end timestamps (msec) with offsets of all data files
 
         Args:
             log_df: collection log dataframe following format in LogColumn
@@ -97,7 +98,8 @@ class Task:
                 value - a tuple of 2 elements (start timestamp, end timestamp), already with offset
 
         Returns:
-            a DF with columns [data_type, start_ts, end_ts, file_path], time columns are after offset
+            a DF with columns [device_type, device_id, data_type, start_ts, end_ts, file_path],
+                time columns are after offset
         """
         # get session info
         date, start_time, end_time = log_df_row.loc[[
@@ -107,6 +109,7 @@ class Task:
         ]]
         start_dt = datetime.strptime(f'{date} {start_time}', '%Y/%m/%d %H:%M:%S')
         end_dt = datetime.strptime(f'{date} {end_time}', '%Y/%m/%d %H:%M:%S')
+        date = date.replace('/', '')
         # check if this session passed midnight
         if start_dt > end_dt:
             end_dt += timedelta(days=1)
@@ -126,7 +129,7 @@ class Task:
 
             # find data file belonging to this session
             # get paths to data files that have the required device ID, device type and collection date
-            pattern = RAW_PATTERN.format(root=self.raw_folder, date=date.replace('/', ''), device_id=device_id,
+            pattern = RAW_PATTERN.format(root=self.raw_folder, date=date, device_id=device_id,
                                          device_type=device_type, data_file='*')
             file_paths = glob(pattern)
             # get start and end times of data files
@@ -140,6 +143,8 @@ class Task:
             assert np.all(diff < 180), 'Matched file has too big difference gap from logged timestamp'
 
             result_df.append({
+                'device_type': device_type,
+                'device_id': device_id,
                 'data_type': data_type,
                 'start_ts': sensor_start_end_tss[sensor_idx][0],
                 'end_ts': sensor_start_end_tss[sensor_idx][1],
@@ -156,7 +161,7 @@ class Task:
 
         Args:
             session_df: dataframe representing a session,
-                columns are [device_type, data_type, start_ts, end_ts, file_path]
+                columns are [device_type, device_id, data_type, start_ts, end_ts, file_path]
             session_offset_dict: a dict containing offsets of this session, key is device ID, value is offset in msec
             scenario_id: scenario ID to use as folder name in the destination paths
             subject_id: subject ID to use as folder name in the destination paths
@@ -166,9 +171,9 @@ class Task:
         session_start_ts = session_df['start_ts'].max()
         session_end_ts = session_df['end_ts'].min()
 
-        for _, (data_type, file_path) in session_df[['data_type', 'file_path']].iterrows():
+        for _, (device_type, device_id, data_type, file_path) in \
+                session_df[['device_type', 'device_id', 'data_type', 'file_path']].iterrows():
             logger.info(f'Processing {file_path}')
-            device_id, device_type = [file_path.split(os.sep)[i] for i in [-3, -2]]
             output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
                                                    scenario_id=scenario_id,
                                                    data_type=data_type,
