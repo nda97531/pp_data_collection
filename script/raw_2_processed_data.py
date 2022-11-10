@@ -10,7 +10,8 @@ if __name__ == '__main__':
     root = '/mnt/data_partition/Research/UCD01 data collection/data/batch3'
     task = Task(
         config_file='../config/device_cfg.yaml',
-        log_file=f'{root}/Collection log (copy).xlsx',
+        log_file=f'{root}/Collection log.xlsx',
+        data_timezone=7,
         raw_data_folder=f'{root}/raw',
         processed_data_folder=f'{root}/processed'
     )

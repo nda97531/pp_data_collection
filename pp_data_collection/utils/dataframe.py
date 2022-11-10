@@ -1,8 +1,10 @@
+from typing import Union, Dict
 import numpy as np
 import pandas as pd
 
 
-def read_df_file(path: str, usecols: list = None, force_column_order: bool = True, **kwargs) -> pd.DataFrame:
+def read_df_file(path: str, usecols: list = None, force_column_order: bool = True,
+                 **kwargs) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
     """
     This function reads a file into a DataFrame object. Supported formats are: parquet, csv, xls, xlsx.
 

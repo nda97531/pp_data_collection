@@ -9,8 +9,7 @@ from loguru import logger
 from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_file, write_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
-from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst, \
-    CFG_OFFSET
+from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst
 from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 
@@ -19,46 +18,43 @@ class RecordingDevice:
     __sub_sensor_names__ = {}
 
     def __init__(self, param: dict):
+        """
+        This is a base class representing a sensor (recording device). Its methods are used to process sensor data.
+        Public methods (without underscore) are for all sensors, while private methods (with underscore) must be
+        overriden for each child class of specific sensor type.
+
+        Args:
+            param: config of 1 sensor only, read from config/device_cfg.yaml
+        """
         self.param = param
 
-    def get_start_end_timestamp_w_offset(self, path: str) -> tuple:
+    def get_start_end_timestamp_w_offset(self, path: str, offset: int) -> tuple:
         """
         Get start & end time of a sensor data file
 
         Args:
             path: path to file
+            offset: time offset in millisecond, this value will be added to raw start/end timestamp
 
         Returns:
             a tuple of 2 elements: start timestamp, end timestamp (unit: millisecond)
         """
         start_ts, end_ts = self._get_start_end_timestamp_wo_offset(path)
-        logger.info(f'Offset for {path} is: {self.param[CFG_OFFSET]} msec')
-        if self.param[CFG_OFFSET] != 0:
-            start_ts += self.param[CFG_OFFSET]
-            end_ts += self.param[CFG_OFFSET]
+        if offset != 0:
+            start_ts += offset
+            end_ts += offset
         return start_ts, end_ts
 
-    def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
-        """
-        Get start & end time of a sensor data file
-
-        Args:
-            path: path to file
-
-        Returns:
-            a tuple of 2 elements: start timestamp, end timestamp (unit: millisecond)
-        """
-        raise NotImplementedError()
-
-    def trim_raw(self, input_path: str, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
+    def trim_raw(self, input_path: str, output_path: str, start_ts: int, end_ts: int, offset: int) -> Union[str, None]:
         """
         Trim a raw sensor data file at 2 ends using given start and end timestamps
 
         Args:
-            input_path: path to sensor file, timestamps of data in file are without offset
+            input_path: path to raw sensor file, timestamps of data in file are without offset
             output_path: path to save output file
             start_ts: timestamp in millisecond (with offset already added)
             end_ts: timestamp in millisecond (with offset already added)
+            offset: time offset in millisecond, this value will be added to raw start/end timestamp
 
         Returns:
             output path if `trim` is successful, else None
@@ -68,45 +64,9 @@ class RecordingDevice:
             return None
 
         data = self._read_raw_data(input_path)
-        data = self._add_offset(data)
+        data = self._add_offset(data, offset)
         output_path = self._trim_data_with_offset(data, output_path, start_ts, end_ts)
         return output_path
-
-    def _read_raw_data(self, input_path: str) -> any:
-        """
-        Read raw data
-
-        Args:
-            input_path: path to data file
-        """
-        raise NotImplementedError()
-
-    def _add_offset(self, data: any) -> any:
-        """
-        Add offset to raw data
-
-        Args:
-            data: raw data
-
-        Returns:
-            raw data with offset
-        """
-        raise NotImplementedError()
-
-    def _trim_data_with_offset(self, data: any, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
-        """
-        Trim a raw sensor data file at 2 ends using given start and end timestamps.
-
-        Args:
-            data: data with offset added
-            output_path: path to save output file
-            start_ts: timestamp in millisecond (with offset already added)
-            end_ts: timestamp in millisecond (with offset already added)
-
-        Returns:
-            output path if `trim` is successful, else None
-        """
-        raise NotImplementedError()
 
     def check_output_path(self, output_path: str) -> Union[str, None]:
         """
@@ -139,6 +99,55 @@ class RecordingDevice:
             subclass
         """
         return RecordingDevice.__sub_sensor_names__[sensor_type]
+
+    def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
+        """
+        Get start & end time of a sensor data file
+
+        Args:
+            path: path to file
+
+        Returns:
+            a tuple of 2 elements: start timestamp, end timestamp (unit: millisecond)
+        """
+        raise NotImplementedError()
+
+    def _read_raw_data(self, input_path: str) -> any:
+        """
+        Read raw data
+
+        Args:
+            input_path: path to data file
+        """
+        raise NotImplementedError()
+
+    def _add_offset(self, data: any, offset: int) -> any:
+        """
+        Add offset to raw data
+
+        Args:
+            data: raw data
+            offset: time offset in millisecond, this value will be added to raw start/end timestamp
+
+        Returns:
+            raw data with offset
+        """
+        raise NotImplementedError()
+
+    def _trim_data_with_offset(self, data: any, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
+        """
+        Trim a raw sensor data file at 2 ends using given start and end timestamps.
+
+        Args:
+            data: data with offset added
+            output_path: path to save output file
+            start_ts: timestamp in millisecond (with offset already added)
+            end_ts: timestamp in millisecond (with offset already added)
+
+        Returns:
+            output path if `trim` is successful, else None
+        """
+        raise NotImplementedError()
 
 
 def device_type(sensor_type: str):
@@ -193,21 +202,22 @@ class TimestampCamera(RecordingDevice):
         video_start_ts, video_end_ts = self._get_start_end_timestamp_wo_offset(input_path)
         return input_path, video_start_ts, video_end_ts
 
-    def _add_offset(self, data: any) -> any:
+    def _add_offset(self, data: any, offset: int) -> any:
         """
         Add offset to data. In this case, data is a tuple as below
 
         Args:
             data: a tuple (video path, start ts, end ts), all timestamps are msec
+            offset: time offset in millisecond, this value will be added to raw start/end timestamp
 
         Returns:
             a tuple (video path, start ts, end ts)
         """
-        if self.param[CFG_OFFSET] == 0:
+        if offset == 0:
             return data
         video_path, video_start_ts, video_end_ts = data
-        video_start_ts += self.param[CFG_OFFSET]
-        video_end_ts += self.param[CFG_OFFSET]
+        video_start_ts += offset
+        video_end_ts += offset
         return video_path, video_start_ts, video_end_ts
 
     def _trim_data_with_offset(self, data: any, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
@@ -261,9 +271,9 @@ class Watch(RecordingDevice):
         df.columns = InertialColumn.to_list()
         return df
 
-    def _add_offset(self, data: any) -> any:
-        if self.param[CFG_OFFSET] != 0:
-            data[InertialColumn.TIMESTAMP.value] += self.param[CFG_OFFSET]
+    def _add_offset(self, data: any, offset: int) -> any:
+        if offset != 0:
+            data[InertialColumn.TIMESTAMP.value] += offset
         return data
 
     def _trim_data_with_offset(self, data: any, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
@@ -306,9 +316,9 @@ class TimerApp(RecordingDevice):
         df = read_df_file(input_path)
         return df
 
-    def _add_offset(self, data: any) -> any:
-        if self.param[CFG_OFFSET] != 0:
-            data[[TimerAppColumn.START_TIMESTAMP.value, TimerAppColumn.END_TIMESTAMP.value]] += self.param[CFG_OFFSET]
+    def _add_offset(self, data: any, offset: int) -> any:
+        if offset != 0:
+            data[[TimerAppColumn.START_TIMESTAMP.value, TimerAppColumn.END_TIMESTAMP.value]] += offset
         return data
 
     def _trim_data_with_offset(self, data: any, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
@@ -379,14 +389,14 @@ class PhoneSensorLogger(RecordingDevice):
 
         return gyro_df, acce_df
 
-    def _add_offset(self, data: any) -> any:
-        if self.param[CFG_OFFSET] == 0:
+    def _add_offset(self, data: any, offset: int) -> any:
+        if offset == 0:
             return data
         gyro_df, acce_df = data
 
         # add timestamp offset
-        gyro_df[self.RAW_TS_COL] += self.param[CFG_OFFSET]
-        acce_df[self.RAW_TS_COL] += self.param[CFG_OFFSET]
+        gyro_df[self.RAW_TS_COL] += offset
+        acce_df[self.RAW_TS_COL] += offset
 
         return gyro_df, acce_df
 

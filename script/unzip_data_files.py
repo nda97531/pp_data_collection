@@ -21,5 +21,5 @@ if __name__ == '__main__':
     logger.info(f'Found {len(zip_files)} zip file(s)')
     for zip_file in zip_files:
         logger.info(f'Unzip file: {zip_file}')
-        output_path = unzip_file(zip_file, del_zip=False)
+        output_path = unzip_file(zip_file, del_zip=True)
         logger.info(f'Saved to: {output_path}')

@@ -14,7 +14,6 @@ CAMERA_FILENAME_PATTERN = 'TimeVideo_%Y%m%d_%H%M%S.%f.mp4'
 Config keys
 """
 CFG_FILE_EXTENSION = 'output_format'
-CFG_OFFSET = 'msec_offset'
 
 """
 Data column patterns
@@ -66,6 +65,7 @@ class LogColumn(Enum):
     """
     Columns of a raw data collection log DF
     """
+    SESSION = 'Session'
     SETUP = 'Setup'
     DATE = 'Date'
     START_TIME = 'Start time'
@@ -88,8 +88,10 @@ class LogSheet(Enum):
     """
     Sheets of a raw data collection log Excel file
     """
-    SESSION = 'Session'
+    LOG = 'Log'
     SUBJECT = 'Subject'
+    SESSION_OFFSET = 'SessionOffset'
+    DAY_OFFSET = 'DayOffset'
 
     @staticmethod
     def to_list():
