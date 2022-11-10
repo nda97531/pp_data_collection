@@ -1,9 +1,8 @@
 from __future__ import annotations
 from typing import Type, Union
 import numpy as np
-import shutil
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 import pandas as pd
 from loguru import logger
 
@@ -11,7 +10,7 @@ from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_f
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
 from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst, \
-    CFG_FILE_EXTENSION, CFG_OFFSET
+    CFG_OFFSET
 from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 

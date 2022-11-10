@@ -1,13 +1,13 @@
 watch:
   sampling_rate: 100 # Hz, resample to this frequency by interpolation
   round_digits: 4 # all sensor values are rounded to this number of decimal digits after interpolation
-  msec_offset: 435974339335
+  msec_offset: 222
   output_format: '.parquet'
 
 sensorlogger:
   sampling_rate: 100 # Hz, resample to this frequency by interpolation
   round_digits: 4 # all sensor values are rounded to this number of decimal digits after interpolation
-  msec_offset: -78772
+  msec_offset: -40557
   output_format: '.parquet'
 
 cam:

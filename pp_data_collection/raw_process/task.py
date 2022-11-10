@@ -114,9 +114,12 @@ class Task:
             # get start and end times of data files
             # numpy array shape [number of files, 2(start ts, end ts)]
             sensor_start_end_tss = np.array([all_files_start_end_tss[path] for path in file_paths])
-            # find which file belongs to this session
-            sensor_idx = np.abs(sensor_start_end_tss - log_start_end_ts).sum(axis=1)
-            sensor_idx = np.argmin(sensor_idx)
+            # find which file belongs to this session by finding the nearest start/end timestamp to logged timestamp
+            diff = np.abs(sensor_start_end_tss - log_start_end_ts)
+            sensor_idx = np.argmin(diff.sum(axis=1))
+            diff = diff[sensor_idx] / 1000
+            logger.info(f'Difference: {diff}(second); Matched file: {file_paths[sensor_idx]}')
+            assert np.all(diff < 180), 'Matched file has too big difference gap from logged timestamp'
 
             result_df.append({
                 'device_type': device_type,
@@ -146,6 +149,7 @@ class Task:
         session_end_ts = session_df['end_ts'].min()
 
         for _, (device_type, data_type, file_path) in session_df[['device_type', 'data_type', 'file_path']].iterrows():
+            logger.info(f'Processing {file_path}')
             output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
                                                    scenario_id=scenario_id,
                                                    data_type=data_type,
@@ -161,9 +165,9 @@ class Task:
                 end_ts=session_end_ts
             )
             if trimmed_path:
-                logger.info(f"Copied '{file_path}' to '{trimmed_path}'")
+                logger.info(f"Saved to '{trimmed_path}'")
             else:
-                logger.info(f'File is not processed: {file_path}')
+                logger.info('File is not processed')
 
     def count_day_subject(self, log_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -222,4 +226,5 @@ class Task:
         # just double check if all found files have been processed
         data_files_processed = set(data_files_processed)
         data_files_found = set(all_files_start_end_tss.keys())
-        assert data_files_found == data_files_processed, f"Mismatched files: {data_files_found - data_files_processed}"
+        if data_files_found != data_files_processed:
+            logger.warning(f"Mismatched files: {data_files_found - data_files_processed}")
