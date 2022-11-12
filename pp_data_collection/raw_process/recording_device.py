@@ -9,7 +9,8 @@ from loguru import logger
 from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_file, write_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
-from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst
+from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst, \
+    DeviceType
 from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 
@@ -167,7 +168,7 @@ def device_type(sensor_type: str):
     return name_sensor_obj
 
 
-@device_type('cam')
+@device_type(str(DeviceType.CAMERA.value))
 class TimestampCamera(RecordingDevice):
     """
     Video recorded by Timestamp Camera app:
@@ -235,7 +236,7 @@ class TimestampCamera(RecordingDevice):
         return output_path
 
 
-@device_type('watch')
+@device_type(str(DeviceType.WATCH.value))
 class Watch(RecordingDevice):
     """
     Watch with built-in 6-axis IMU. A data file is a csv file with no header. Columns are:
@@ -289,7 +290,7 @@ class Watch(RecordingDevice):
         return output_path
 
 
-@device_type('timerapp')
+@device_type(str(DeviceType.TIMER_APP.value))
 class TimerApp(RecordingDevice):
     """
     An Android app for manual online labelling:
@@ -327,7 +328,7 @@ class TimerApp(RecordingDevice):
         return output_path
 
 
-@device_type('sensorlogger')
+@device_type(str(DeviceType.SENSOR_LOGGER.value))
 class PhoneSensorLogger(RecordingDevice):
     """
     Inertial data recorded by this app: https://www.tszheichoi.com/sensorlogger

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<timeseries date="2022-11-11T18:55:08-00:00" version="1.0">
+    <tracksource sample-type="Discontinuous Rate"
+        source-url="file:///{absolute_wrist_path}" time-column="0">
+        <property key="provider" value="mpi.eudico.client.annotator.timeseries.csv.CSVServiceProvider"/>
+        <track derivative="0" name="wrist_x">
+            <property key="detect-range" value="false"/>
+            <sample-position>
+                <pos col="2" row="0"/>
+            </sample-position>
+            <description/>
+            <units/>
+            <range max="45.0" min="-45.0"/>
+            <color>255,0,0</color>
+        </track>
+        <track derivative="0" name="wrist_y">
+            <property key="detect-range" value="false"/>
+            <sample-position>
+                <pos col="3" row="0"/>
+            </sample-position>
+            <description/>
+            <units/>
+            <range max="45.0" min="-45.0"/>
+            <color>0,204,0</color>
+        </track>
+        <track derivative="0" name="wrist_z">
+            <property key="detect-range" value="false"/>
+            <sample-position>
+                <pos col="4" row="0"/>
+            </sample-position>
+            <description/>
+            <units/>
+            <range max="45.0" min="-45.0"/>
+            <color>0,0,255</color>
+        </track>
+    </tracksource>
+    <tracksource sample-type="Discontinuous Rate"
+        source-url="file:///{absolute_phone_path}" time-column="0">
+        <property key="provider" value="mpi.eudico.client.annotator.timeseries.csv.CSVServiceProvider"/>
+        <track derivative="0" name="phone_x">
+            <property key="detect-range" value="false"/>
+            <sample-position>
+                <pos col="2" row="0"/>
+            </sample-position>
+            <description/>
+            <units/>
+            <range max="45.0" min="-45.0"/>
+            <color>204,0,51</color>
+        </track>
+        <track derivative="0" name="phone_z">
+            <property key="detect-range" value="false"/>
+            <sample-position>
+                <pos col="4" row="0"/>
+            </sample-position>
+            <description/>
+            <units/>
+            <range max="45.0" min="-45.0"/>
+            <color>0,51,255</color>
+        </track>
+        <track derivative="0" name="phone_y">
+            <property key="detect-range" value="false"/>
+            <sample-position>
+                <pos col="3" row="0"/>
+            </sample-position>
+            <description/>
+            <units/>
+            <range max="45.0" min="-45.0"/>
+            <color>0,204,0</color>
+        </track>
+    </tracksource>
+</timeseries>

@@ -1,19 +1,55 @@
+import os
 from enum import Enum
 
 """
-File path patterns
+File path patterns.
+All the below {root} are not the same, but specialise for each data stage (raw, processed, ELAN) 
 """
-# RAW_PATTERN example: 20220709/a33/cam/TimestampCamera_20220709_120000.00.mp4
-RAW_PATTERN = '{root}/{date}/{device_id}/{device_type}/{data_file}'
-# PROCESSED_PATTERN example: mounted_rgb/1/0000_0000_1.mp4
-PROCESSED_PATTERN = '{root}/scenario_{scenario_id}/{data_type}/{start_ts}_{end_ts}_{subject_id}_{ith_day}'
+# RAW_PATTERN example: raw_root/20220709/a33/cam/TimestampCamera_20220709_120000.00.mp4
+RAW_PATTERN = os.sep.join(['{root}', '{date}', '{device_id}', '{device_type}', '{data_file}'])
 
+# PROCESSED_PATTERN example: processed_root/setup_2/mounted_rgb/0000_0000_1_1.mp4
+SESSION_ID = '{start_ts}_{end_ts}_{subject_id}_{ith_day}'
+PROCESSED_PATTERN = os.sep.join(['{root}', 'setup_{setup_id}', '{data_type}', SESSION_ID])
+
+# ELAN_PATTERN example: elan_root/0000_0000_1_1/0000_0000_1_1_wrist_inertia.elan
+ELAN_PATTERN = os.sep.join(['{root}', '{session_id}', '{session_id}_{data_type}'])
+
+# raw camera filename with extension
 CAMERA_FILENAME_PATTERN = 'TimeVideo_%Y%m%d_%H%M%S.%f.mp4'
 
 """
 Config keys
 """
 CFG_FILE_EXTENSION = 'output_format'
+
+"""
+Device and data info
+"""
+
+
+class DeviceType(Enum):
+    CAMERA = 'cam'
+    WATCH = 'watch'
+    SENSOR_LOGGER = 'sensorlogger'
+    TIMER_APP = 'timerapp'
+
+    @staticmethod
+    def to_list():
+        return [item.value for item in DeviceType]
+
+
+class DataType(Enum):
+    MOUNTED_RGB = 'Mounted_RGB'
+    HANDHELD_RGB = 'Handheld_RGB'
+    PHONE_INERTIA = 'Phone_inertia'
+    WRIST_INERTIA = 'Wrist_inertia'
+    ONLINE_LABEL = 'Online_label'
+
+    @staticmethod
+    def to_list():
+        return [item.value for item in DataType]
+
 
 """
 Data column patterns
@@ -72,11 +108,11 @@ class LogColumn(Enum):
     END_TIME = 'End time'
     SUBJECT = 'Subject ID'
     SENSOR_COLS = [
-        'Mounted_RGB cam',
-        'Handheld_RGB cam',
-        'Phone_inertia sensorlogger',
-        'Wrist_inertia watch',
-        'Online_label timerapp'
+        f'{DataType.MOUNTED_RGB.value} {DeviceType.CAMERA.value}',
+        f'{DataType.HANDHELD_RGB.value} {DeviceType.CAMERA.value}',
+        f'{DataType.PHONE_INERTIA.value} {DeviceType.SENSOR_LOGGER.value}',
+        f'{DataType.WRIST_INERTIA.value} {DeviceType.WATCH.value}',
+        f'{DataType.ONLINE_LABEL.value} {DeviceType.TIMER_APP.value}'
     ]
 
     @staticmethod

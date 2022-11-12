@@ -1,6 +1,8 @@
+import os
 from typing import Union, Dict
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 
 def read_df_file(path: str, usecols: list = None, force_column_order: bool = True,
@@ -20,7 +22,7 @@ def read_df_file(path: str, usecols: list = None, force_column_order: bool = Tru
     if path.endswith('csv'):
         df = pd.read_csv(path, usecols=usecols, **kwargs)
     elif path.endswith('parquet'):
-        df = pd.read_csv(path, usecols=usecols, **kwargs)
+        df = pd.read_parquet(path, columns=usecols, **kwargs)
     elif path.endswith('xlsx') or path.endswith('xls'):
         df = pd.read_excel(path, usecols=usecols, **kwargs)
         if force_column_order and usecols:
@@ -30,7 +32,7 @@ def read_df_file(path: str, usecols: list = None, force_column_order: bool = Tru
     return df
 
 
-def write_df_file(df: pd.DataFrame, path: str, columns: list = None, **kwargs) -> None:
+def write_df_file(df: pd.DataFrame, path: str, columns: list = None, overwrite: bool = False, **kwargs) -> None:
     """
     Write a DF into a file. Supported formats are: parquet, csv, xlsx
 
@@ -38,10 +40,17 @@ def write_df_file(df: pd.DataFrame, path: str, columns: list = None, **kwargs) -
         df: Dataframe to write
         path: path to save file
         columns: columns to write, default: all
+        overwrite: overwrite if file already exists
         **kwargs: keyword arguments for pandas' writing function
     """
+    if (not overwrite) and os.path.isfile(path):
+        logger.info(f'Not writing {path} because it already exists.')
+        return
+
     if columns:
         df = df[columns]
+
+    os.makedirs(os.path.split(path)[0], exist_ok=True)
 
     if path.endswith('csv'):
         df.to_csv(path, index=False, **kwargs)
@@ -76,3 +85,28 @@ def interpolate_numeric_df(df: pd.DataFrame, timestamp_col: str, new_timestamp: 
 
     new_df = pd.DataFrame(new_df)
     return new_df
+
+
+def down_sample_df(df: pd.DataFrame, down_sample_by: int) -> pd.DataFrame:
+    """
+    Down-sample a dataframe by drop rows periodically using numpy.linspace. The first and the last rows will be kept.
+
+    Args:
+        df: input dataframe
+        down_sample_by: keep 1/N rows of the input DF with N is this parameter
+
+    Returns:
+        a smaller DF with the same columns
+    """
+    if len(df) <= 2:
+        logger.info(f'Skip down-sampling because the input DF only have {len(df)} row(s).')
+        return df
+
+    num_row = round(len(df) / down_sample_by)
+    if num_row == len(df):
+        return df
+
+    keep_idx = np.linspace(0, len(df) - 1, num_row, endpoint=True)
+    df = df.iloc[keep_idx]
+    df = df.reset_index(drop=True)
+    return df

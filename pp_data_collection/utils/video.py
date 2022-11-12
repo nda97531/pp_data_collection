@@ -1,9 +1,5 @@
-import numpy as np
-from typing import Tuple
-import cv2
 import subprocess
 import json
-
 from moviepy.tools import subprocess_call as moviepy_subprocess_call
 
 
@@ -57,43 +53,47 @@ def get_video_metadata(path: str) -> dict:
     }
 
 
-class BaseVideoWriter:
-    def write_frame(self, frame: np.ndarray):
-        """
-        Write next frame to the video
-
-        Args:
-            frame: a frame in the form of a numpy array
-        """
-        raise NotImplementedError()
-
-    def close(self):
-        """
-        Close the video writer
-        """
-        raise NotImplementedError()
-
-
-class OpenCVVideoWriter(BaseVideoWriter):
-    def __init__(self, path: str, resolution: Tuple[int, int], fps: float, video_format: str = 'MP4V'):
-        if video_format.upper() == 'MJPG':
-            ext = '.avi'
-        elif video_format.upper() == 'MP4V':
-            ext = '.mp4'
-        else:
-            raise ValueError('only support format MP4V and MJPG')
-
-        if not path.endswith(ext):
-            path += ext
-
-        self.resolution = resolution
-        self.reversed_resolution = resolution[::-1]
-        self.writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*video_format), fps, resolution)
-
-    def write_frame(self, frame: np.ndarray):
-        if frame.shape[:2] != self.reversed_resolution:
-            frame = cv2.resize(frame, self.resolution)
-        self.writer.write(frame)
-
-    def close(self):
-        self.writer.release()
+# opencv-python == 4.5.5.64
+# import numpy as np
+# from typing import Tuple
+# import cv2
+# class BaseVideoWriter:
+#     def write_frame(self, frame: np.ndarray):
+#         """
+#         Write next frame to the video
+#
+#         Args:
+#             frame: a frame in the form of a numpy array
+#         """
+#         raise NotImplementedError()
+#
+#     def close(self):
+#         """
+#         Close the video writer
+#         """
+#         raise NotImplementedError()
+#
+#
+# class OpenCVVideoWriter(BaseVideoWriter):
+#     def __init__(self, path: str, resolution: Tuple[int, int], fps: float, video_format: str = 'MP4V'):
+#         if video_format.upper() == 'MJPG':
+#             ext = '.avi'
+#         elif video_format.upper() == 'MP4V':
+#             ext = '.mp4'
+#         else:
+#             raise ValueError('only support format MP4V and MJPG')
+#
+#         if not path.endswith(ext):
+#             path += ext
+#
+#         self.resolution = resolution
+#         self.reversed_resolution = resolution[::-1]
+#         self.writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*video_format), fps, resolution)
+#
+#     def write_frame(self, frame: np.ndarray):
+#         if frame.shape[:2] != self.reversed_resolution:
+#             frame = cv2.resize(frame, self.resolution)
+#         self.writer.write(frame)
+#
+#     def close(self):
+#         self.writer.release()

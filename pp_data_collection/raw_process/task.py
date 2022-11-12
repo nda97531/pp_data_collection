@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from loguru import logger
 
-from pp_data_collection.constants import LogColumn, PROCESSED_PATTERN, RAW_PATTERN
+from pp_data_collection.constants import LogColumn, PROCESSED_PATTERN, RAW_PATTERN, DeviceType
 from pp_data_collection.raw_process.config_yaml import DeviceConfig
 from pp_data_collection.raw_process.log_excel import CollectionLog
 from pp_data_collection.raw_process.recording_device import RecordingDevice
@@ -14,7 +14,7 @@ from pp_data_collection.utils.time import datetime_2_timestamp
 
 
 class Task:
-    def __init__(self, config_file: str, log_file: str, data_timezone: int, raw_data_folder: str,
+    def __init__(self, device_config_file: str, log_file: str, data_timezone: int, raw_data_folder: str,
                  processed_data_folder: str):
         """
         A class for raw data handling:
@@ -24,7 +24,7 @@ class Task:
             - copy data files to an organised destination
 
         Args:
-            config_file: path to config yaml file
+            device_config_file: path to config yaml file
             log_file: path to the data collection log file (excel)
             data_timezone: timezone of all datetime values in data and log
             raw_data_folder: folder containing raw data from recording devices, see RAW_PATTERN for more details
@@ -38,12 +38,12 @@ class Task:
         self.ITH_DAY = 'ith_day'
 
         # read config
-        config = DeviceConfig(config_file).load()
+        config = DeviceConfig(device_config_file).load()
 
         # initialise sensor objects
         self.sensor_objects: Dict[str, RecordingDevice] = {}
         for sensor_type, sensor_param in config.items():
-            if sensor_type == 'cam':
+            if sensor_type == DeviceType.CAMERA.value:
                 sensor_param['data_timezone'] = data_timezone
             self.sensor_objects[sensor_type] = RecordingDevice.get_sensor_class(sensor_type)(sensor_param)
 
@@ -155,7 +155,7 @@ class Task:
         return result_df
 
     def trim_data_files_of_session(self, session_df: pd.DataFrame, session_offset_dict: dict,
-                                   scenario_id: any, subject_id: any, ith_day: int) -> None:
+                                   setup_id: any, subject_id: any, ith_day: int) -> None:
         """
         Trim raw data files and save to the destination paths
 
@@ -163,7 +163,7 @@ class Task:
             session_df: dataframe representing a session,
                 columns are [device_type, device_id, data_type, start_ts, end_ts, file_path]
             session_offset_dict: a dict containing offsets of this session, key is device ID, value is offset in msec
-            scenario_id: scenario ID to use as folder name in the destination paths
+            setup_id: setup ID to use as folder name in the destination paths
             subject_id: subject ID to use as folder name in the destination paths
             ith_day: ordinal number of collection day of this subject
         """
@@ -175,7 +175,7 @@ class Task:
                 session_df[['device_type', 'device_id', 'data_type', 'file_path']].iterrows():
             logger.info(f'Processing {file_path}')
             output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
-                                                   scenario_id=scenario_id,
+                                                   setup_id=setup_id,
                                                    data_type=data_type,
                                                    start_ts=session_start_ts,
                                                    end_ts=session_end_ts,
@@ -229,7 +229,7 @@ class Task:
         for row_name, row in log_df.iterrows():
             # get info of this session
             session_no = row.at[LogColumn.SESSION.value]
-            scenario_id = row.at[LogColumn.SETUP.value]
+            setup_id = row.at[LogColumn.SETUP.value]
             subject_id = row.at[LogColumn.SUBJECT.value]
             ith_day = row.at[self.ITH_DAY]
             logger.info(f"Processing session number {session_no} at row {row_name} of log file")
@@ -240,8 +240,7 @@ class Task:
             logger.info(f"Processing {len(session_df)} files of this session")
 
             # trim data files
-            self.trim_data_files_of_session(session_df, session_offset_dict[session_no], scenario_id, subject_id,
-                                            ith_day)
+            self.trim_data_files_of_session(session_df, session_offset_dict[session_no], setup_id, subject_id, ith_day)
 
         # just double check if all found files have been processed
         data_files_processed = set(data_files_processed)
