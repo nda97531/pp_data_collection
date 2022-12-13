@@ -37,6 +37,7 @@ def write_text_file(content: str, path: str, overwrite: str = False) -> bool:
 
     with open(path, 'w') as F:
         F.write(content)
+    logger.info(f'File {path} saved.')
     return True
 
 

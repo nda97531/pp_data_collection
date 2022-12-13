@@ -246,4 +246,4 @@ class Task:
         data_files_processed = set(data_files_processed)
         data_files_found = set(all_files_start_end_tss.keys())
         if data_files_found != data_files_processed:
-            logger.warning(f"Mismatched files: {data_files_found - data_files_processed}")
+            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(data_files_found - data_files_processed)))

@@ -13,6 +13,16 @@ from pp_data_collection.utils.text_file import write_text_file
 class Task:
     def __init__(self, elan_session_folder: str, processed_data_folder: str, template_folder: str,
                  device_config_file: str, down_sample_by: int):
+        """
+        This class is for creation of ELAN files for labelling. Created file can be loaded directly into the ELAN tool,
+        video and inertia are also loaded.
+        Args:
+            elan_session_folder: a folder to save all ELAN sessions
+            processed_data_folder: processed data folder (folder that contains all session data after trimming)
+            template_folder: folder containing ELAN template files
+            device_config_file: path to device config file (YAML)
+            down_sample_by: down-sampling factor to reduce CSV file size; new size = old size / down_sample_by
+        """
         self.elan_folder = elan_session_folder
         self.processed_data_folder = processed_data_folder
         self.template_folder = template_folder
@@ -141,10 +151,13 @@ class Task:
         absolute_eaf_path = self.write_an_elan_file(
             elan_file_ext='.eaf', session_id=session_id, setup_id=setup_id, destination_folder=elan_session_folder,
             params={'absolute_video_path': absolute_video_path,
-                    'absolute_xml_path': absolute_xml_path} | inertial_params
+                    'absolute_xml_path': absolute_xml_path, **inertial_params}
         )
-        logger.info(f'{sum([bool(absolute_eaf_path), bool(absolute_pfsx_path), bool(absolute_xml_path)])}'
-                    f' ELAN files saved to folder {elan_session_folder}')
+        num_written_files = sum([bool(absolute_eaf_path), bool(absolute_pfsx_path), bool(absolute_xml_path)])
+        if num_written_files:
+            logger.info(f'{num_written_files} ELAN files saved to folder {elan_session_folder}')
+        else:
+            logger.info('No file is created for this session.')
 
     def run(self):
         """

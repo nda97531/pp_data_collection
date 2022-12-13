@@ -18,7 +18,7 @@ class CollectionLog:
     @staticmethod
     def _df_2_dict(df: pd.DataFrame) -> dict:
         """
-        Convert a DF into a dict.
+        Convert a DF into a dict, skip nan and None values, and convert other values to int
 
         Args:
             df: a Dataframe with at least 2 columns
@@ -28,6 +28,12 @@ class CollectionLog:
         """
         df.index = df.iloc[:, 0]
         dic = df.transpose().iloc[1:].to_dict()
+        for session, d in list(dic.items()):
+            for device_id, offset in list(d.items()):
+                if pd.isna(offset):
+                    del d[device_id]
+                else:
+                    d[device_id] = int(offset)
         return dic
 
     def load(self) -> Tuple[pd.DataFrame, dict, dict]:
