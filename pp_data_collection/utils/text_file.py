@@ -17,7 +17,7 @@ def read_all_text(path: str) -> str:
     return content
 
 
-def write_text_file(content: str, path: str, overwrite: str = False) -> bool:
+def write_text_file(content: str, path: str, overwrite: bool = False) -> bool:
     """
     Write a string into a text file.
 

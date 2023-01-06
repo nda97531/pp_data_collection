@@ -155,9 +155,9 @@ class Task:
         return result_df
 
     def trim_data_files_of_session(self, session_df: pd.DataFrame, session_offset_dict: dict,
-                                   setup_id: any, subject_id: any, ith_day: int) -> None:
+                                   setup_id: any, subject_id: any, ith_day: int) -> int:
         """
-        Trim raw data files and save to the destination paths
+        Trim raw data files of one session and save to the destination paths
 
         Args:
             session_df: dataframe representing a session,
@@ -166,14 +166,17 @@ class Task:
             setup_id: setup ID to use as folder name in the destination paths
             subject_id: subject ID to use as folder name in the destination paths
             ith_day: ordinal number of collection day of this subject
+
+        Returns:
+            number of processed files
         """
         # find sensors intersection range
         session_start_ts = session_df['start_ts'].max()
         session_end_ts = session_df['end_ts'].min()
 
+        num_processed_files = 0
         for _, (device_type, device_id, data_type, file_path) in \
                 session_df[['device_type', 'device_id', 'data_type', 'file_path']].iterrows():
-            logger.info(f'Processing {file_path}')
             output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
                                                    setup_id=setup_id,
                                                    data_type=data_type,
@@ -187,8 +190,10 @@ class Task:
             )
             if trimmed_path:
                 logger.info(f"Saved to '{trimmed_path}'")
+                num_processed_files += 1
             else:
                 logger.info('File is not processed')
+        return num_processed_files
 
     def count_day_subject(self, log_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -224,7 +229,9 @@ class Task:
         all_files_start_end_tss = self.get_all_start_end_timestamps(log_df, day_offset_dict)
         logger.info(f"Get start & end timestamps of all data files, number of files: {len(all_files_start_end_tss)}")
 
-        data_files_processed = []
+        files_matched = []
+        num_processed_sessions = 0
+        num_processed_files = 0
         # for each session
         for row_name, row in log_df.iterrows():
             # get info of this session
@@ -236,14 +243,25 @@ class Task:
 
             # find all data files of this session
             session_df = self.find_data_files_of_session(row, all_files_start_end_tss)
-            data_files_processed += session_df['file_path'].to_list()
-            logger.info(f"Processing {len(session_df)} files of this session")
+            files_matched += session_df['file_path'].to_list()
+            logger.info(f"This session has {len(session_df)} data files")
 
             # trim data files
-            self.trim_data_files_of_session(session_df, session_offset_dict[session_no], setup_id, subject_id, ith_day)
+            num_new_files = self.trim_data_files_of_session(
+                session_df, session_offset_dict[session_no], setup_id, subject_id, ith_day
+            )
+            if num_new_files:
+                num_processed_files += num_new_files
+                num_processed_sessions += 1
 
-        # just double check if all found files have been processed
-        data_files_processed = set(data_files_processed)
-        data_files_found = set(all_files_start_end_tss.keys())
-        if data_files_found != data_files_processed:
-            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(data_files_found - data_files_processed)))
+        # just double check if all found files matched to a session
+        files_matched = set(files_matched)
+        files_scanned = set(all_files_start_end_tss.keys())
+        if files_scanned != files_matched:
+            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(files_scanned - files_matched)))\
+
+        # print statistics
+        logger.info('Statistics:\n'
+                    f'{len(log_df)} sessions and {len(files_scanned)} files scanned\n'
+                    f'{len(files_matched)} files matched to sessions\n'
+                    f'{num_processed_sessions} sessions and {num_processed_files} files processed')

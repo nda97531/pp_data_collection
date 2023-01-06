@@ -1,6 +1,9 @@
 ### Scripts:
-- _create_csv_for_elan.py_: This script creates and organises all files needed to open a session in ELAN tool.
+- _unzip_data_files.py_: This script unzips all zip files of SensorLogger app
+- _show_inertia.py_: This script shows inertia data of 2 sensors for manual sync
+- _datetime_show_timestamp.py_: This script shows the timestamp of datetime string.
 - _raw_2_processed_data.py_: This script summarises all data files, process raw data, and put them into a structure directory.
+- _create_csv_for_elan.py_: This script creates and organises all files needed to open a session in ELAN tool.
 
 ### Note:
 - All timestamps used in code are millisecond, unless specified otherwise.

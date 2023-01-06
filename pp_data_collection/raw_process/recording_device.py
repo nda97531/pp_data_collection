@@ -64,6 +64,7 @@ class RecordingDevice:
         if not output_path:
             return None
 
+        logger.info(f'Processing {input_path}')
         data = self._read_raw_data(input_path)
         data = self._add_offset(data, offset)
         output_path = self._trim_data_with_offset(data, output_path, start_ts, end_ts)

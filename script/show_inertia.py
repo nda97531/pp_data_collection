@@ -1,9 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-folder = '/mnt/data_partition/Research/UCD01 data collection/data/batch3/raw/20221205/'
-file_sensorlogger = f'{folder}/i7/sensorlogger/2022-12-05_03-34-12/Accelerometer.csv'
-file_watch = f'{folder}/h2c4/watch/1670211253953_Ngan3_Badmintonserving_5.csv'
+folder = '/mnt/data_drive/projects/UCD01 - Privacy preserving data collection/data/batch3/raw/20221222/'
+file_sensorlogger = f'{folder}/i7/sensorlogger/2022-12-22_02-03-33/Accelerometer.csv'
+file_watch = f'{folder}/h2c4/watch/1671674615871_Lamnt167_Badmintonserving_5.csv'
 
 df_sensorlogger = pd.read_csv(file_sensorlogger)
 df_watch = pd.read_csv(file_watch, header=None)

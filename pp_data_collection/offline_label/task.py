@@ -1,6 +1,6 @@
 import os
 from glob import glob
-from typing import List
+from typing import List, Union
 from loguru import logger
 
 from pp_data_collection.constants import PROCESSED_PATTERN, ELAN_PATTERN, DeviceType, CFG_FILE_EXTENSION, \
@@ -81,7 +81,7 @@ class Task:
         return dest_file_path
 
     def write_an_elan_file(self, elan_file_ext: str, session_id: str, setup_id: str, destination_folder: str,
-                           params: dict) -> str:
+                           params: dict) -> Union[str, None]:
         """
         Create an ELAN file for a session (a video) from a template file.
 
@@ -106,20 +106,23 @@ class Task:
 
         # get output path
         destination_file = os.path.join(destination_folder, session_id + elan_file_ext)
+        if os.path.isfile(destination_file):
+            logger.info(f'Skipping file {destination_file} because it already exists.')
+            return None
 
         # read input (template content)
         with open(template_file, 'r') as F:
             template = F.read()
 
         content = template.format(**params)
-        written = write_text_file(content, destination_file)
-        return destination_file if written else None
+        write_text_file(content, destination_file, overwrite=True)
+        return destination_file
 
     def create_elan_files(self,
                           session_id: str,
                           setup_id: str,
                           absolute_video_path: str,
-                          absolute_inertia_paths: dict):
+                          absolute_inertia_paths: dict) -> int:
         """
         Create all necessary ELAN files for a session.
 
@@ -128,6 +131,9 @@ class Task:
             setup_id: setup ID to find the right template files because different setups use different inertial sensors
             absolute_video_path: absolute processed video path
             absolute_inertia_paths: dictionary with keys are data types of inertia files (see class DataType)
+
+        Returns:
+            number of files written
         """
         # get destination folder for this session
         elan_session_folder = os.path.join(self.elan_folder, session_id)
@@ -158,6 +164,7 @@ class Task:
             logger.info(f'{num_written_files} ELAN files saved to folder {elan_session_folder}')
         else:
             logger.info('No file is created for this session.')
+        return num_written_files
 
     def run(self):
         """
@@ -165,6 +172,8 @@ class Task:
         """
         video_paths = self.get_processed_videos()
 
+        num_session_written = 0
+        num_files_written = 0
         # for each session that has video
         for video_path in video_paths:
             logger.info(f'Processing video: {video_path}')
@@ -191,4 +200,12 @@ class Task:
             logger.info(f'Found {len(inertia_paths)} inertia file(s) for this video.')
 
             # create ELAN files from templates
-            self.create_elan_files(session_id, setup_id, video_path, inertia_paths)
+            num_new_files = self.create_elan_files(session_id, setup_id, video_path, inertia_paths)
+            if num_new_files:
+                num_files_written += num_new_files
+                num_session_written += 1
+
+        logger.info('Statistics:\n'
+                    f'{len(video_paths)} sessions found\n'
+                    f'{num_session_written} sessions processed\n'
+                    f'{num_files_written} files written')
