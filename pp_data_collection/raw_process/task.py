@@ -154,6 +154,23 @@ class Task:
         result_df = pd.DataFrame.from_records(result_df)
         return result_df
 
+    @staticmethod
+    def find_start_end_ts_of_session(session_df: pd.DataFrame) -> tuple:
+        """
+        Find start and end timestamp of session so that all sensors cover the whole session
+
+        Args:
+            session_df: dataframe representing a session,
+                columns are [device_type, device_id, data_type, start_ts, end_ts, file_path]
+
+        Returns:
+            a tuple (start ts, end ts)
+        """
+        df = session_df.loc[session_df['device_type'] != DeviceType.TIMER_APP.value]
+        session_start_ts = df['start_ts'].max()
+        session_end_ts = df['end_ts'].min()
+        return session_start_ts, session_end_ts
+
     def trim_data_files_of_session(self, session_df: pd.DataFrame, session_offset_dict: dict,
                                    setup_id: any, subject_id: any, ith_day: int) -> int:
         """
@@ -171,8 +188,7 @@ class Task:
             number of processed files
         """
         # find sensors intersection range
-        session_start_ts = session_df['start_ts'].max()
-        session_end_ts = session_df['end_ts'].min()
+        session_start_ts, session_end_ts = self.find_start_end_ts_of_session(session_df)
 
         num_processed_files = 0
         for _, (device_type, device_id, data_type, file_path) in \
@@ -258,8 +274,8 @@ class Task:
         files_matched = set(files_matched)
         files_scanned = set(all_files_start_end_tss.keys())
         if files_scanned != files_matched:
-            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(files_scanned - files_matched)))\
-
+            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(files_scanned - files_matched))) \
+ \
         # print statistics
         logger.info('Statistics:\n'
                     f'{len(log_df)} sessions and {len(files_scanned)} files scanned\n'
