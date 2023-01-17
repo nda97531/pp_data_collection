@@ -2,11 +2,13 @@ watch:
   sampling_rate: 100 # Hz, resample to this frequency by interpolation
   round_digits: 4 # all sensor values are rounded to this number of decimal digits after interpolation
   output_format: '.parquet'
+  max_time_gap: 500 # timestamp in ms, data files with a gap bigger than this will be split #TODO
 
 sensorlogger:
   sampling_rate: 100 # Hz, resample to this frequency by interpolation
   round_digits: 4 # all sensor values are rounded to this number of decimal digits after interpolation
   output_format: '.parquet'
+  max_time_gap: 500 # timestamp in ms, data files with a gap bigger than this will be split
 
 cam:
   output_format: '.mp4'

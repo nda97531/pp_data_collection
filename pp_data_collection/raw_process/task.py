@@ -166,10 +166,25 @@ class Task:
         Returns:
             a tuple (start ts, end ts)
         """
+        # exclude TimerApp because it is not a sensor but an online labelling tool
         df = session_df.loc[session_df['device_type'] != DeviceType.TIMER_APP.value]
         session_start_ts = df['start_ts'].max()
         session_end_ts = df['end_ts'].min()
         return session_start_ts, session_end_ts
+
+    def find_start_end_ts_of_session2(self, session_df: pd.DataFrame) -> tuple:
+
+        # exclude TimerApp because it is not a sensor but an online labelling tool
+        df = session_df.loc[session_df['device_type'] != DeviceType.TIMER_APP.value]
+
+        all_sensor_ts_segments = []
+        for _, (device_type, device_id, data_type, start_ts, end_ts, file_path) in df.iterrows():
+            interrupted_ts_segments = self.sensor_objects[device_type].split_interrupted_ts(file_path)
+            if interrupted_ts_segments is None:
+                interrupted_ts_segments = [[start_ts, end_ts]]
+            all_sensor_ts_segments.append(interrupted_ts_segments)
+
+        # TODO
 
     def trim_data_files_of_session(self, session_df: pd.DataFrame, session_offset_dict: dict,
                                    setup_id: any, subject_id: any, ith_day: int) -> int:
@@ -247,7 +262,7 @@ class Task:
 
         files_matched = []
         num_processed_sessions = 0
-        num_processed_files = 0
+        num_processed_raw_files = 0
         # for each session
         for row_name, row in log_df.iterrows():
             # get info of this session
@@ -267,17 +282,16 @@ class Task:
                 session_df, session_offset_dict[session_no], setup_id, subject_id, ith_day
             )
             if num_new_files:
-                num_processed_files += num_new_files
+                num_processed_raw_files += num_new_files
                 num_processed_sessions += 1
 
         # just double check if all found files matched to a session
         files_matched = set(files_matched)
         files_scanned = set(all_files_start_end_tss.keys())
         if files_scanned != files_matched:
-            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(files_scanned - files_matched))) \
- \
+            logger.warning(f"Mismatched files:\n" + '\n'.join(sorted(files_scanned - files_matched)))
         # print statistics
         logger.info('Statistics:\n'
                     f'{len(log_df)} sessions and {len(files_scanned)} files scanned\n'
                     f'{len(files_matched)} files matched to sessions\n'
-                    f'{num_processed_sessions} sessions and {num_processed_files} files processed')
+                    f'{num_processed_sessions} sessions and {num_processed_raw_files} raw files processed')
