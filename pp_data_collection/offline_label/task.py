@@ -3,8 +3,8 @@ from glob import glob
 from typing import List, Union
 from loguru import logger
 
-from pp_data_collection.constants import PROCESSED_PATTERN, ELAN_PATTERN, DeviceType, CFG_FILE_EXTENSION, \
-    InertialColumn, DataType
+from pp_data_collection.constants import PROCESSED_PATTERN, ELAN_FILE_PATTERN, ELAN_FOLDER_PATTERN, DeviceType, \
+    CFG_FILE_EXTENSION, InertialColumn, DataType
 from pp_data_collection.raw_process.config_yaml import DeviceConfig
 from pp_data_collection.utils.dataframe import read_df_file, write_df_file, down_sample_df
 from pp_data_collection.utils.text_file import write_text_file
@@ -50,7 +50,7 @@ class Task:
         logger.info(f'Found {len(files)} sessions with videos.')
         return files
 
-    def adapt_dataframe_for_elan(self, df_file: str, data_type: str, session_id: str) -> str:
+    def adapt_dataframe_for_elan(self, df_file: str, data_type: str, session_id: str, dest_folder: str) -> str:
         """
         Adapt a processed dataframe, so it can be loaded into ELAN tool. Then save the adapted file to self.elan_folder
 
@@ -58,6 +58,7 @@ class Task:
             df_file: path to processed inertia file
             data_type: a data type in class DataType
             session_id: session ID following pattern in SESSION_ID
+            dest_folder: destination folder to save the file
 
         Returns:
             return the path to the result file
@@ -71,9 +72,8 @@ class Task:
                   column='sec',
                   value=(df[InertialColumn.TIMESTAMP.value] - df.at[0, InertialColumn.TIMESTAMP.value]) / 1000)
         # save to ELAN folder
-        dest_file_path = ELAN_PATTERN.format(root=self.elan_folder,
-                                             session_id=f'{session_id}',
-                                             data_type=data_type) + '.csv'
+        dest_file_path = ELAN_FILE_PATTERN.format(elan_folder=dest_folder,
+                                                  session_id=f'{session_id}_{data_type}.csv')
         if os.path.isfile(dest_file_path):
             logger.info(f'Not writing file {dest_file_path} because it already exists.')
         else:
@@ -105,7 +105,8 @@ class Task:
         logger.info(f'Using template: {template_file}')
 
         # get output path
-        destination_file = os.path.join(destination_folder, session_id + elan_file_ext)
+        destination_file = ELAN_FILE_PATTERN.format(elan_folder=destination_folder,
+                                                    session_id=f'{session_id}{elan_file_ext}')
         if os.path.isfile(destination_file):
             logger.info(f'Skipping file {destination_file} because it already exists.')
             return None
@@ -122,7 +123,8 @@ class Task:
                           session_id: str,
                           setup_id: str,
                           absolute_video_path: str,
-                          absolute_inertia_paths: dict) -> int:
+                          absolute_inertia_paths: dict,
+                          dest_folder: str) -> int:
         """
         Create all necessary ELAN files for a session.
 
@@ -131,13 +133,10 @@ class Task:
             setup_id: setup ID to find the right template files because different setups use different inertial sensors
             absolute_video_path: absolute processed video path
             absolute_inertia_paths: dictionary with keys are data types of inertia files (see class DataType)
-
+            dest_folder: folder to save ELAN file
         Returns:
             number of files written
         """
-        # get destination folder for this session
-        elan_session_folder = os.path.join(self.elan_folder, session_id)
-
         # get absolute data paths
         inertial_params = {}
         if DataType.WRIST_INERTIA.value in absolute_inertia_paths:
@@ -147,21 +146,21 @@ class Task:
 
         # create ELAN files
         absolute_pfsx_path = self.write_an_elan_file(
-            elan_file_ext='.pfsx', session_id=session_id, setup_id=setup_id, destination_folder=elan_session_folder,
+            elan_file_ext='.pfsx', session_id=session_id, setup_id=setup_id, destination_folder=dest_folder,
             params={'session_id': session_id}
         )
         absolute_xml_path = self.write_an_elan_file(
-            elan_file_ext='.xml', session_id=session_id, setup_id=setup_id, destination_folder=elan_session_folder,
+            elan_file_ext='.xml', session_id=session_id, setup_id=setup_id, destination_folder=dest_folder,
             params=inertial_params
         )
         absolute_eaf_path = self.write_an_elan_file(
-            elan_file_ext='.eaf', session_id=session_id, setup_id=setup_id, destination_folder=elan_session_folder,
+            elan_file_ext='.eaf', session_id=session_id, setup_id=setup_id, destination_folder=dest_folder,
             params={'absolute_video_path': absolute_video_path,
                     'absolute_xml_path': absolute_xml_path, **inertial_params}
         )
         num_written_files = sum([bool(absolute_eaf_path), bool(absolute_pfsx_path), bool(absolute_xml_path)])
         if num_written_files:
-            logger.info(f'{num_written_files} ELAN files saved to folder {elan_session_folder}')
+            logger.info(f'{num_written_files} ELAN files saved to folder {dest_folder}')
         else:
             logger.info('No file is created for this session.')
         return num_written_files
@@ -191,16 +190,19 @@ class Task:
             # find all processed inertia files
             inertia_files = glob(inertia_pattern)
 
+            # create output folder
+            dest_folder = ELAN_FOLDER_PATTERN.format(root=self.elan_folder, setup_id=setup_id, session_id=session_id)
+
             # write new inertia files for ELAN
             inertia_paths = {}
             for inertia_file in inertia_files:
                 data_type = inertia_file.split(os.sep)[-2]
-                result_csv_path = self.adapt_dataframe_for_elan(inertia_file, data_type, session_id)
+                result_csv_path = self.adapt_dataframe_for_elan(inertia_file, data_type, session_id, dest_folder)
                 inertia_paths[data_type] = result_csv_path
             logger.info(f'Found {len(inertia_paths)} inertia file(s) for this video.')
 
             # create ELAN files from templates
-            num_new_files = self.create_elan_files(session_id, setup_id, video_path, inertia_paths)
+            num_new_files = self.create_elan_files(session_id, setup_id, video_path, inertia_paths, dest_folder)
             if num_new_files:
                 num_files_written += num_new_files
                 num_session_written += 1
