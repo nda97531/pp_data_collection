@@ -12,8 +12,9 @@ RAW_PATTERN = os.sep.join(['{root}', '{date}', '{device_id}', '{device_type}', '
 SESSION_ID = '{subject_id}_{ith_day}_{start_ts}_{end_ts}'
 PROCESSED_PATTERN = os.sep.join(['{root}', 'setup_{setup_id}', '{data_type}', SESSION_ID])
 
-# ELAN_PATTERN example: elan_root/0000_0000_1_1/0000_0000_1_1_wrist_inertia.elan
-ELAN_PATTERN = os.sep.join(['{root}', '{session_id}', '{session_id}_{data_type}'])
+# ELAN_PATTERN example: elan_root/setup_6/0000_0000_1_1/0000_0000_1_1_wrist_inertia.elan
+ELAN_FOLDER_PATTERN = os.sep.join(['{root}', 'setup_{setup_id}', '{session_id}'])
+ELAN_FILE_PATTERN = os.sep.join(['{elan_folder}', '{session_id}'])
 
 # raw camera filename with extension
 CAMERA_FILENAME_PATTERN = 'TimeVideo_%Y%m%d_%H%M%S.%f.mp4'
