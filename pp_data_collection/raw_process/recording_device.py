@@ -118,6 +118,15 @@ class RecordingDevice:
                 For example, a session from timestamp 0 to 100 is split into 3 sub-sessions:
                 ((0, 30), (31, 81), (82, 100))
         """
+        split_ts = self._split_interrupted_ts(file_path)
+        logger.info(f'This file has {len(split_ts)} gap(s) at {[split_ts]}.')
+        return split_ts
+
+    def _split_interrupted_ts(self, file_path: str) -> Union[list, None]:
+        """
+        Same as `split_interrupted_ts` but this method doesn't have log.
+        `split_interrupted_ts` calls this (overriden) method and prints log for all sensor types.
+        """
         raise NotImplementedError()
 
     def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
@@ -198,7 +207,7 @@ class TimestampCamera(RecordingDevice):
     Example name: TimeVideo_20220709_113327.07.mp4
     """
 
-    def split_interrupted_ts(self, file_path: str) -> Union[list, None]:
+    def _split_interrupted_ts(self, file_path: str) -> Union[list, None]:
         return None
 
     def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
@@ -267,7 +276,7 @@ class TimerApp(RecordingDevice):
     (start and end are timestamp columns, unit is millisec)
     """
 
-    def split_interrupted_ts(self, file_path: str) -> Union[list, None]:
+    def _split_interrupted_ts(self, file_path: str) -> Union[list, None]:
         return None
 
     def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
@@ -304,20 +313,7 @@ class InertialSensor(RecordingDevice, ABC):
     Base class for all inertial sensor classes
     """
 
-    def __init__(self, param: dict):
-        super().__init__(param)
-
-        # save the last DF to avoid reading the same file twice
-        self.last_df: Dict[str, pd.DataFrame] = {}
-
-    def _read_raw_data(self, input_path: str) -> any:
-        if input_path in self.last_df:
-            return self.last_df[input_path]
-        data = self._read_raw_data_frame(input_path)
-        self.last_df = {input_path: data}
-        return data
-
-    def split_interrupted_ts(self, file_path: str) -> [list, None]:
+    def _split_interrupted_ts(self, file_path: str) -> [list, None]:
         ts = self._get_raw_ts_array(file_path)
         split_idx = (np.diff(ts) > self.param['max_time_gap']).nonzero()[0]
         if len(split_idx) == 0:
@@ -330,24 +326,6 @@ class InertialSensor(RecordingDevice, ABC):
         for i in range(len(split_idx) - 1):
             subsession_ts.append([ts[split_idx[i]], ts[split_idx[i + 1] - 1]])
         return subsession_ts
-
-    def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
-        ts = self._get_raw_ts_array(path)
-        start_ts = ts[0]
-        end_ts = ts[-1]
-        return start_ts, end_ts
-
-    def _read_raw_data_frame(self, input_path: str) -> any:
-        """
-        Read raw data frame of a session
-
-        Args:
-            input_path: path to data file
-
-        Returns:
-            data of this sensor
-        """
-        raise NotImplementedError()
 
     def _get_raw_ts_array(self, input_path: str) -> np.ndarray:
         """
@@ -382,7 +360,18 @@ class Watch(InertialSensor):
         # convert from Hz (sample/s) to sample/ms
         self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
 
-    def _read_raw_data_frame(self, input_path: str) -> any:
+    def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
+        # read first and last line of file
+        with open(path) as f:
+            first_line = f.readline()
+        last_line = read_last_line(path)
+        # extract timestamps
+        start_ts = int(first_line.split(',')[0])
+        end_ts = int(last_line.split(',')[0])
+
+        return start_ts, end_ts
+
+    def _read_raw_data(self, input_path: str) -> any:
         df = read_df_file(input_path, header=None)
         df.columns = InertialColumn.to_list()
         return df
@@ -432,7 +421,27 @@ class PhoneSensorLogger(InertialSensor):
         self.ACCE_FILENAME = SensorLoggerConst.ACCE_FILENAME.value
         self.GYRO_FILENAME = SensorLoggerConst.GYRO_FILENAME.value
 
-    def _read_raw_data_frame(self, input_path: str) -> any:
+    def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
+        first_ts = -1
+        last_ts = float('inf')
+
+        for filename in [self.GYRO_FILENAME, self.ACCE_FILENAME]:
+            filepath = os.sep.join([path, filename])
+            # read first and last line of file
+            with open(filepath) as f:
+                file_first_line = f.readline()
+                assert file_first_line.split(',')[0] == self.RAW_TS_COL
+                file_first_line = f.readline()
+            file_last_line = read_last_line(filepath)
+            # extract timestamp, convert from nanosecond to millisecond
+            file_first_msec = round(int(file_first_line.split(',')[0]) / 1e6)
+            file_last_msec = round(int(file_last_line.split(',')[0]) / 1e6)
+            # get overlapping range of all modalities
+            first_ts = max(first_ts, file_first_msec)
+            last_ts = min(last_ts, file_last_msec)
+        return first_ts, last_ts
+
+    def _read_raw_data(self, input_path: str) -> any:
         # read DF raw data files
         use_cols = [self.RAW_TS_COL] + self.RAW_DATA_COLS
         gyro_df = read_df_file(os.sep.join([input_path, self.GYRO_FILENAME]), usecols=use_cols)
@@ -447,14 +456,14 @@ class PhoneSensorLogger(InertialSensor):
         del gravity_df
 
         # convert timestamp nanosec -> millisec
-        gyro_df[self.RAW_TS_COL] = (gyro_df[self.RAW_TS_COL] / 1e6).round()
-        acce_df[self.RAW_TS_COL] = (acce_ts / 1e6).round()
+        gyro_df[self.RAW_TS_COL] = (gyro_df[self.RAW_TS_COL] / 1e6).round().astype(int)
+        acce_df[self.RAW_TS_COL] = (acce_ts / 1e6).round().astype(int)
 
         return gyro_df, acce_df
 
     def _get_raw_ts_array(self, input_path: str) -> np.ndarray:
         data = self._read_raw_data(input_path)
-        ts = data[0][InertialColumn.TIMESTAMP.value].to_numpy()
+        ts = data[0][SensorLoggerConst.RAW_TS_COL.value].to_numpy()
         return ts
 
     def _add_offset_to_data(self, data: any, offset: int) -> any:

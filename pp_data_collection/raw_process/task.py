@@ -10,6 +10,7 @@ from pp_data_collection.constants import LogColumn, PROCESSED_PATTERN, RAW_PATTE
 from pp_data_collection.raw_process.config_yaml import DeviceConfig
 from pp_data_collection.raw_process.log_excel import CollectionLog
 from pp_data_collection.raw_process.recording_device import RecordingDevice
+from pp_data_collection.utils.number_array import interval_intersection
 from pp_data_collection.utils.time import datetime_2_timestamp
 
 
@@ -154,26 +155,19 @@ class Task:
         result_df = pd.DataFrame.from_records(result_df)
         return result_df
 
-    @staticmethod
-    def find_start_end_ts_of_session(session_df: pd.DataFrame) -> tuple:
+    def find_start_end_ts_of_session(self, session_df: pd.DataFrame) -> list:
         """
-        Find start and end timestamp of session so that all sensors cover the whole session
+        Find start and end timestamp of a session so that all sensors cover the whole session. If a sensor data file is
+        interrupted, the session will be split into multiple sub-sessions (segments).
 
         Args:
             session_df: dataframe representing a session,
                 columns are [device_type, device_id, data_type, start_ts, end_ts, file_path]
 
         Returns:
-            a tuple (start ts, end ts)
+            A 2-level list of sub-sessions' start & end timestamp.
+                Example: [[start ts, end ts], [start ts, end ts], ...]
         """
-        # exclude TimerApp because it is not a sensor but an online labelling tool
-        df = session_df.loc[session_df['device_type'] != DeviceType.TIMER_APP.value]
-        session_start_ts = df['start_ts'].max()
-        session_end_ts = df['end_ts'].min()
-        return session_start_ts, session_end_ts
-
-    def find_start_end_ts_of_session2(self, session_df: pd.DataFrame) -> tuple:
-
         # exclude TimerApp because it is not a sensor but an online labelling tool
         df = session_df.loc[session_df['device_type'] != DeviceType.TIMER_APP.value]
 
@@ -184,7 +178,8 @@ class Task:
                 interrupted_ts_segments = [[start_ts, end_ts]]
             all_sensor_ts_segments.append(interrupted_ts_segments)
 
-        # TODO
+        ts_intersection = interval_intersection(all_sensor_ts_segments)
+        return ts_intersection
 
     def trim_data_files_of_session(self, session_df: pd.DataFrame, session_offset_dict: dict,
                                    setup_id: any, subject_id: any, ith_day: int) -> int:
@@ -203,27 +198,37 @@ class Task:
             number of processed files
         """
         # find sensors intersection range
-        session_start_ts, session_end_ts = self.find_start_end_ts_of_session(session_df)
+        subsessions_ts = self.find_start_end_ts_of_session(session_df)
 
         num_processed_files = 0
+        # for each sensor file
         for _, (device_type, device_id, data_type, file_path) in \
                 session_df[['device_type', 'device_id', 'data_type', 'file_path']].iterrows():
-            output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
-                                                   setup_id=setup_id,
-                                                   data_type=data_type,
-                                                   start_ts=session_start_ts,
-                                                   end_ts=session_end_ts,
-                                                   subject_id=subject_id,
-                                                   ith_day=ith_day)
-            os.makedirs(os.path.split(output_path)[0], exist_ok=True)
-            trimmed_path = self.sensor_objects[device_type].trim_raw(
-                file_path, output_path, session_start_ts, session_end_ts, session_offset_dict[device_id]
-            )
-            if trimmed_path:
-                logger.info(f"Saved to '{trimmed_path}'")
+            saved_file = False
+            # for each sub-session
+            for subsession_ts in subsessions_ts:
+                subsession_start_ts, subsession_end_ts = subsession_ts
+
+                output_path = PROCESSED_PATTERN.format(root=self.processed_folder,
+                                                       setup_id=setup_id,
+                                                       data_type=data_type,
+                                                       subject_id=subject_id,
+                                                       ith_day=ith_day,
+                                                       start_ts=subsession_start_ts,
+                                                       end_ts=subsession_end_ts)
+                os.makedirs(os.path.split(output_path)[0], exist_ok=True)
+                trimmed_path = self.sensor_objects[device_type].trim_raw(
+                    file_path, output_path, subsession_start_ts, subsession_end_ts, session_offset_dict[device_id]
+                )
+                if trimmed_path:
+                    logger.info(f"Saved to '{trimmed_path}'")
+                    saved_file = True
+
+            if saved_file:
                 num_processed_files += 1
             else:
                 logger.info('File is not processed')
+
         return num_processed_files
 
     def count_day_subject(self, log_df: pd.DataFrame) -> pd.DataFrame:

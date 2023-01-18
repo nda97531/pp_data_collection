@@ -9,7 +9,7 @@ All the below {root} are not the same, but specialise for each data stage (raw, 
 RAW_PATTERN = os.sep.join(['{root}', '{date}', '{device_id}', '{device_type}', '{data_file}'])
 
 # PROCESSED_PATTERN example: processed_root/setup_2/mounted_rgb/0000_0000_1_1.mp4
-SESSION_ID = '{start_ts}_{end_ts}_{subject_id}_{ith_day}'
+SESSION_ID = '{subject_id}_{ith_day}_{start_ts}_{end_ts}'
 PROCESSED_PATTERN = os.sep.join(['{root}', 'setup_{setup_id}', '{data_type}', SESSION_ID])
 
 # ELAN_PATTERN example: elan_root/0000_0000_1_1/0000_0000_1_1_wrist_inertia.elan
