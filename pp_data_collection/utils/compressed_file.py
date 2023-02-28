@@ -1,6 +1,7 @@
 import zipfile
 import os
 from typing import Union
+from loguru import logger
 
 
 def unzip_file(zip_path: str, destination_folder: str = None, extract_to_name: bool = True,
@@ -27,10 +28,13 @@ def unzip_file(zip_path: str, destination_folder: str = None, extract_to_name: b
         destination_folder = os.sep.join([destination_folder, input_filename[:-4]])
         os.makedirs(destination_folder, exist_ok=True)
     # extract
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(destination_folder)
-    # delete zip file
-    if del_zip:
-        os.remove(zip_path)
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(destination_folder)
+        # delete zip file
+        if del_zip:
+            os.remove(zip_path)
+    except Exception as e:
+        logger.error(f'error at file: {zip_path} - {e}')
 
     return destination_folder

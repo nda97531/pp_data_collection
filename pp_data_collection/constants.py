@@ -1,6 +1,8 @@
 import os
 from enum import Enum
 
+G_TO_MS2 = 9.80665
+
 """
 File path patterns.
 All the below {root} are not the same, but specialise for each data stage (raw, processed, ELAN) 
@@ -80,9 +82,8 @@ class SensorLoggerConst(Enum):
     """
     RAW_TS_COL = 'time'
     RAW_DATA_COLS = ['x', 'y', 'z']
-    GRAVITY_FILENAME = 'Gravity.csv'
-    ACCE_FILENAME = 'Accelerometer.csv'
-    GYRO_FILENAME = 'Gyroscope.csv'
+    ACCE_FILENAME = 'AccelerometerUncalibrated.csv'
+    GYRO_FILENAME = 'GyroscopeUncalibrated.csv'
 
 
 class TimerAppColumn(Enum):

@@ -12,7 +12,7 @@ from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_f
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
 from pp_data_collection.constants import CAMERA_FILENAME_PATTERN, InertialColumn, TimerAppColumn, SensorLoggerConst, \
-    DeviceType
+    DeviceType, G_TO_MS2
 from pp_data_collection.utils.text_file import read_last_line
 from pp_data_collection.utils.video import get_video_metadata
 
@@ -417,7 +417,6 @@ class PhoneSensorLogger(InertialSensor):
 
         self.RAW_TS_COL: str = SensorLoggerConst.RAW_TS_COL.value
         self.RAW_DATA_COLS: list = SensorLoggerConst.RAW_DATA_COLS.value
-        self.GRAVITY_FILENAME = SensorLoggerConst.GRAVITY_FILENAME.value
         self.ACCE_FILENAME = SensorLoggerConst.ACCE_FILENAME.value
         self.GYRO_FILENAME = SensorLoggerConst.GYRO_FILENAME.value
 
@@ -446,18 +445,13 @@ class PhoneSensorLogger(InertialSensor):
         use_cols = [self.RAW_TS_COL] + self.RAW_DATA_COLS
         gyro_df = read_df_file(os.sep.join([input_path, self.GYRO_FILENAME]), usecols=use_cols)
         acce_df = read_df_file(os.sep.join([input_path, self.ACCE_FILENAME]), usecols=use_cols)
-        gravity_df = read_df_file(os.sep.join([input_path, self.GRAVITY_FILENAME]), usecols=use_cols)
 
-        acce_ts = acce_df[self.RAW_TS_COL]
-
-        # add gravity to acceleration
-        assert acce_ts.equals(gravity_df[self.RAW_TS_COL]), "Accelerometer and Gravity timestamps mismatched"
-        acce_df[self.RAW_DATA_COLS] += gravity_df[self.RAW_DATA_COLS]
-        del gravity_df
+        # convert g to m/s^2
+        acce_df[self.RAW_DATA_COLS] *= G_TO_MS2
 
         # convert timestamp nanosec -> millisec
         gyro_df[self.RAW_TS_COL] = (gyro_df[self.RAW_TS_COL] / 1e6).round().astype(int)
-        acce_df[self.RAW_TS_COL] = (acce_ts / 1e6).round().astype(int)
+        acce_df[self.RAW_TS_COL] = (acce_df[self.RAW_TS_COL] / 1e6).round().astype(int)
 
         return gyro_df, acce_df
 
