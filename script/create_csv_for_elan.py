@@ -9,7 +9,7 @@ if __name__ == '__main__':
         elan_session_folder=f'{root}/data/batch3/elan/',
         processed_data_folder=f'{root}/data/batch3/processed/',
         template_folder=f'{root}/pp_data_collection/elan_template',
-        device_config_file=f'{root}/pp_data_collection/config/device_cfg.yaml',
+        device_config_file=f'{root}/pp_data_collection/config/cfg.yaml',
         down_sample_by=4
     )
     task.run()
