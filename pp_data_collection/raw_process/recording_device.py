@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Type, Union, Dict
+from typing import Type, Union
 import numpy as np
 import os
 from datetime import datetime
 import pandas as pd
 from loguru import logger
 
+from pp_data_collection.raw_process.config_yaml import Config
 from pp_data_collection.utils.dataframe import interpolate_numeric_df, read_df_file, write_df_file
 from pp_data_collection.utils.time import datetime_2_timestamp
 from pp_data_collection.utils.video import ffmpeg_cut_video
@@ -20,16 +21,16 @@ from pp_data_collection.utils.video import get_video_metadata
 class RecordingDevice:
     __sub_sensor_names__ = {}
 
-    def __init__(self, param: dict):
+    def __init__(self, config: Config):
         """
         This is a base class representing a sensor (recording device). Its methods are used to process sensor data.
         Public methods (without underscore) are for all sensors, while private methods (with underscore) must be
         overriden for each child class of specific sensor type.
 
         Args:
-            param: config of 1 sensor only, read from config/device_cfg.yaml
+            config: config read from config/cfg.yaml
         """
-        self.param = param
+        self.config = config
 
     def get_start_end_timestamp_w_offset(self, path: str, offset: int) -> tuple:
         """
@@ -85,7 +86,7 @@ class RecordingDevice:
         Returns:
             if file already exists, return None; else, return output path with extension added
         """
-        output_path += self.param['output_format']
+        output_path += self.config.device_cfg[self.name]['output_format']
         if os.path.exists(output_path):
             logger.info(f'This file already exists: {output_path}')
             return None
@@ -119,7 +120,8 @@ class RecordingDevice:
                 ((0, 30), (31, 81), (82, 100))
         """
         split_ts = self._split_interrupted_ts(file_path)
-        logger.info(f'This file has {len(split_ts)} gap(s) at {[split_ts]}.')
+        if split_ts:
+            logger.info(f'{file_path} has {len(split_ts)} gap(s) at {[split_ts]}.')
         return split_ts
 
     def _split_interrupted_ts(self, file_path: str) -> Union[list, None]:
@@ -189,8 +191,11 @@ def device_type(sensor_type: str):
     if sensor_type in RecordingDevice.__sub_sensor_names__:
         raise ValueError(f'Duplicate sensor name: {sensor_type}')
 
+    assert sensor_type in DeviceType.to_set(), f'{sensor_type} not defined in constants'
+
     def name_sensor_obj(obj):
         RecordingDevice.__sub_sensor_names__[sensor_type] = obj
+        setattr(obj, 'name', sensor_type)
         return obj
 
     return name_sensor_obj
@@ -213,7 +218,7 @@ class TimestampCamera(RecordingDevice):
     def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
         # get video start time
         vid_start_datetime = datetime.strptime(os.path.split(path)[1], CAMERA_FILENAME_PATTERN)
-        vid_start_timestamp = datetime_2_timestamp(vid_start_datetime, tz=self.param['data_timezone'])
+        vid_start_timestamp = datetime_2_timestamp(vid_start_datetime, tz=self.config.data_timezone)
 
         # calculate video end time
         vid_end_timestamp = vid_start_timestamp + round(get_video_metadata(path)['length'] * 1000)
@@ -314,17 +319,21 @@ class InertialSensor(RecordingDevice, ABC):
     """
 
     def _split_interrupted_ts(self, file_path: str) -> [list, None]:
+        # find timestamp gaps in file
         ts = self._get_raw_ts_array(file_path)
-        split_idx = (np.diff(ts) > self.param['max_time_gap']).nonzero()[0]
+        split_idx = (np.diff(ts) > self.config.max_time_gap).nonzero()[0]
         if len(split_idx) == 0:
             return None
-
         split_idx += 1
         split_idx = np.concatenate([[0], split_idx, [len(ts)]])
 
+        # record segments longer than the threshold `min_session_len`
         subsession_ts = []
         for i in range(len(split_idx) - 1):
-            subsession_ts.append([ts[split_idx[i]], ts[split_idx[i + 1] - 1]])
+            start_ts = ts[split_idx[i]]
+            end_ts = ts[split_idx[i + 1] - 1]
+            if (end_ts - start_ts) >= self.config.min_session_len:
+                subsession_ts.append([start_ts, end_ts])
         return subsession_ts
 
     def _get_raw_ts_array(self, input_path: str) -> np.ndarray:
@@ -353,12 +362,17 @@ class Watch(InertialSensor):
         gyroscope z (rad/s)
     """
 
-    def __init__(self, param: dict):
-        super().__init__(param)
-        assert 1000 % self.param['sampling_rate'] == 0, \
-            "1000 must be divisible by sampling rate to make sure that timestamp (ms) is an integer"
+    def __init__(self, config: Config):
+        super().__init__(config)
+
         # convert from Hz (sample/s) to sample/ms
-        self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
+        self.sampling_rate = self.config.device_cfg[self.name]['sampling_rate']
+        self.round_digits = self.config.device_cfg[self.name]['round_digits']
+
+        assert 1000 % self.sampling_rate == 0, \
+            "1000 must be divisible by sampling rate to make sure that timestamp (ms) is an integer"
+
+        self.sampling_rate /= 1000
 
     def _get_start_end_timestamp_wo_offset(self, path: str) -> tuple:
         # read first and last line of file
@@ -388,13 +402,13 @@ class Watch(InertialSensor):
 
     def _trim_data_with_offset(self, data: any, output_path: str, start_ts: int, end_ts: int) -> Union[str, None]:
         # create new timestamp array from session's start and end timestamp
-        new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
-                           ) / self.param['sampling_rate'] + start_ts
+        new_ts = np.arange(np.floor((end_ts - start_ts) * self.sampling_rate + 1)
+                           ) / self.sampling_rate + start_ts
         new_ts = new_ts.astype(int)
         # interpolate
         data = interpolate_numeric_df(data, timestamp_col=InertialColumn.TIMESTAMP.value, new_timestamp=new_ts)
-        if self.param['round_digits'] is not None:
-            data = data.round(self.param['round_digits'])
+        if self.round_digits is not None:
+            data = data.round(self.round_digits)
         write_df_file(data, output_path)
         return output_path
 
@@ -408,12 +422,17 @@ class PhoneSensorLogger(InertialSensor):
     Both files have the same set of columns: time, seconds_elapsed, z, y, x
     """
 
-    def __init__(self, param: dict):
-        super().__init__(param)
-        assert 1000 % self.param['sampling_rate'] == 0, \
-            "1000 must be divisible by sampling rate to make sure that timestamp (ms) is an integer"
+    def __init__(self, config: Config):
+        super().__init__(config)
+
         # convert from Hz (sample/s) to sample/ms
-        self.param['sampling_rate'] = self.param['sampling_rate'] / 1000
+        self.sampling_rate = self.config.device_cfg[self.name]['sampling_rate']
+        self.round_digits = self.config.device_cfg[self.name]['round_digits']
+
+        assert 1000 % self.sampling_rate == 0, \
+            "1000 must be divisible by sampling rate to make sure that timestamp (ms) is an integer"
+
+        self.sampling_rate /= 1000
 
         self.RAW_TS_COL: str = SensorLoggerConst.RAW_TS_COL.value
         self.RAW_DATA_COLS: list = SensorLoggerConst.RAW_DATA_COLS.value
@@ -475,8 +494,8 @@ class PhoneSensorLogger(InertialSensor):
         gyro_df, acce_df = data
 
         # interpolate
-        new_ts = np.arange(np.floor((end_ts - start_ts) * self.param['sampling_rate'] + 1)
-                           ) / self.param['sampling_rate'] + start_ts
+        new_ts = np.arange(np.floor((end_ts - start_ts) * self.sampling_rate + 1)
+                           ) / self.sampling_rate + start_ts
         new_ts = new_ts.astype(int)
         gyro_df = interpolate_numeric_df(gyro_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
         acce_df = interpolate_numeric_df(acce_df, timestamp_col=self.RAW_TS_COL, new_timestamp=new_ts)
@@ -485,8 +504,8 @@ class PhoneSensorLogger(InertialSensor):
         df = pd.concat([acce_df, gyro_df[self.RAW_DATA_COLS]], axis=1, ignore_index=True)
         df.columns = InertialColumn.to_list()
 
-        if self.param['round_digits'] is not None:
-            df = df.round(self.param['round_digits'])
+        if self.round_digits is not None:
+            df = df.round(self.round_digits)
 
         write_df_file(df, output_path)
         return output_path

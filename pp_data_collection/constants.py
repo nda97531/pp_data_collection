@@ -41,6 +41,10 @@ class DeviceType(Enum):
     def to_list():
         return [item.value for item in DeviceType]
 
+    @staticmethod
+    def to_set():
+        return set(item.value for item in DeviceType)
+
 
 class DataType(Enum):
     MOUNTED_RGB = 'Mounted_RGB'

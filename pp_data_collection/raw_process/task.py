@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 
 from pp_data_collection.constants import LogColumn, PROCESSED_PATTERN, RAW_PATTERN, DeviceType
-from pp_data_collection.raw_process.config_yaml import DeviceConfig
+from pp_data_collection.raw_process.config_yaml import Config
 from pp_data_collection.raw_process.log_excel import CollectionLog
 from pp_data_collection.raw_process.recording_device import RecordingDevice
 from pp_data_collection.utils.number_array import interval_intersection
@@ -15,8 +15,7 @@ from pp_data_collection.utils.time import datetime_2_timestamp
 
 
 class Task:
-    def __init__(self, device_config_file: str, log_file: str, data_timezone: int, raw_data_folder: str,
-                 processed_data_folder: str):
+    def __init__(self, device_config_file: str, log_file: str, raw_data_folder: str, processed_data_folder: str):
         """
         A class for raw data handling:
             - pre-process raw data (if applicable)
@@ -27,26 +26,23 @@ class Task:
         Args:
             device_config_file: path to config yaml file
             log_file: path to the data collection log file (excel)
-            data_timezone: timezone of all datetime values in data and log
             raw_data_folder: folder containing raw data from recording devices, see RAW_PATTERN for more details
             processed_data_folder: folder to save processed data
         """
         self.log_file = log_file
         self.raw_folder = raw_data_folder
         self.processed_folder = processed_data_folder
-        self.data_timezone = data_timezone
         # column name to add to log df, this represents ordinal number of collection day of each subject
         self.ITH_DAY = 'ith_day'
 
         # read config
-        config = DeviceConfig(device_config_file).load()
+        cfg_obj = Config(device_config_file).load()
+        self.data_timezone = cfg_obj.data_timezone
 
         # initialise sensor objects
         self.sensor_objects: Dict[str, RecordingDevice] = {}
-        for sensor_type, sensor_param in config.items():
-            if sensor_type == DeviceType.CAMERA.value:
-                sensor_param['data_timezone'] = data_timezone
-            self.sensor_objects[sensor_type] = RecordingDevice.get_sensor_class(sensor_type)(sensor_param)
+        for sensor_type, sensor_param in cfg_obj.device_cfg.items():
+            self.sensor_objects[sensor_type] = RecordingDevice.get_sensor_class(sensor_type)(cfg_obj)
 
     def get_all_start_end_timestamps(self, log_df: pd.DataFrame,
                                      day_offset_dict: dict) -> Dict[str, Tuple[int, int]]:

@@ -5,7 +5,7 @@ from loguru import logger
 
 from pp_data_collection.constants import PROCESSED_PATTERN, ELAN_FILE_PATTERN, ELAN_FOLDER_PATTERN, DeviceType, \
     CFG_FILE_EXTENSION, InertialColumn, DataType
-from pp_data_collection.raw_process.config_yaml import DeviceConfig
+from pp_data_collection.raw_process.config_yaml import Config
 from pp_data_collection.utils.dataframe import read_df_file, write_df_file, down_sample_df
 from pp_data_collection.utils.text_file import write_text_file
 
@@ -30,9 +30,9 @@ class Task:
         self.down_sample_by = down_sample_by
 
         # get processed file extensions
-        cfg = DeviceConfig(self.device_config_file).load()
-        self.video_extension = cfg[DeviceType.CAMERA.value][CFG_FILE_EXTENSION]
-        self.inertia_extension = cfg[DeviceType.WATCH.value][CFG_FILE_EXTENSION]
+        cfg_obj = Config(self.device_config_file).load()
+        self.video_extension = cfg_obj.device_cfg[DeviceType.CAMERA.value][CFG_FILE_EXTENSION]
+        self.inertia_extension = cfg_obj.device_cfg[DeviceType.WATCH.value][CFG_FILE_EXTENSION]
 
     def get_processed_videos(self) -> List[str]:
         """

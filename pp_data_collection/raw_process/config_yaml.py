@@ -1,10 +1,9 @@
 import yaml
 
 from pp_data_collection.constants import CFG_FILE_EXTENSION, DeviceType
-from pp_data_collection.raw_process.recording_device import RecordingDevice
 
 
-class DeviceConfig:
+class Config:
     def __init__(self, yaml_file: str):
         """
         Class for device_config.yaml
@@ -14,18 +13,24 @@ class DeviceConfig:
         """
         self.yaml_file = yaml_file
 
-    def load(self) -> dict:
+        self.max_time_gap: int = None
+        self.min_session_len: int = None
+        self.data_timezone: int = None
+        self.device_cfg: dict = None
+
+    @staticmethod
+    def verify_device_config(cfg: dict) -> dict:
         """
-        Load and validate config file
+        Verify config of devices only
+
+        Args:
+            cfg: loaded config with only device names as keys
 
         Returns:
-            config as a dict
+            the config after verification
         """
-        with open(self.yaml_file, 'r') as F:
-            cfg = yaml.safe_load(F)
-
         # check if all devices in the config match all devices in the code
-        code_devices = set(DeviceType.to_list())
+        code_devices = DeviceType.to_set()
         config_devices = cfg.keys()
         diff = (config_devices | code_devices) - (config_devices & code_devices)
         assert len(diff) == 0, f'Device type mismatch between code and config: {diff}'
@@ -41,13 +46,26 @@ class DeviceConfig:
             assert isinstance(sensor_cfg[CFG_FILE_EXTENSION], str) and sensor_cfg[CFG_FILE_EXTENSION].startswith('.'), \
                 f"'{CFG_FILE_EXTENSION}' must be a string starting with a dot (.)"
 
-            # check if sensor type in the config is also defined in the workflow
-            assert sensor_type in RecordingDevice.__sub_sensor_names__, f"Unknown sensor type in config: {sensor_type}"
-
-        # check if a max gap is defined for each inertial sensor
-        for sensor_type in [DeviceType.WATCH.value, DeviceType.SENSOR_LOGGER.value]:
-            sensor_cfg = cfg[sensor_type]
-            assert isinstance(sensor_cfg['max_time_gap'], int), \
-                f"a 'max_time_gap' integer must be defined for each inertial sensor"
-
         return cfg
+
+    def load(self):
+        """
+        Load and validate config file
+        """
+        with open(self.yaml_file, 'r') as F:
+            cfg = yaml.safe_load(F)
+
+        # verify params
+        assert isinstance(cfg['max_time_gap'], int), f"a 'max_time_gap' integer must be defined"
+        self.max_time_gap = cfg.pop('max_time_gap')
+
+        assert isinstance(cfg['min_session_len'], int), f"a 'min_session_len' integer must be defined"
+        self.min_session_len = cfg.pop('min_session_len')
+
+        assert isinstance(cfg['data_timezone'], int), f"a 'data_timezone' integer must be defined"
+        self.data_timezone = cfg.pop('data_timezone')
+
+        # verify device cfg
+        self.device_cfg = self.verify_device_config(cfg)
+
+        return self
