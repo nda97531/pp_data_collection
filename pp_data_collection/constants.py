@@ -138,3 +138,19 @@ class LogSheet(Enum):
     @staticmethod
     def to_list():
         return [item.value for item in LogSheet]
+
+
+class ElanExportCsv(Enum):
+    """
+    Columns of a CSV file exported by ELAN tool after labelling.
+    """
+    TIER = 'tier'
+    EMPTY_COL = ''
+    BEGIN_MS = 'begin_ms'
+    END_MS = 'end_ms'
+    LABEL = 'label'
+    ELAN_PATH = 'elan_path'
+
+    @staticmethod
+    def to_list():
+        return [item.value for item in ElanExportCsv]

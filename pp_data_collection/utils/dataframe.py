@@ -32,7 +32,7 @@ def read_df_file(path: str, usecols: list = None, force_column_order: bool = Tru
     return df
 
 
-def write_df_file(df: pd.DataFrame, path: str, columns: list = None, overwrite: bool = False, **kwargs) -> None:
+def write_df_file(df: pd.DataFrame, path: str, columns: list = None, overwrite: bool = False, **kwargs) -> bool:
     """
     Write a DF into a file. Supported formats are: parquet, csv, xlsx
 
@@ -42,10 +42,13 @@ def write_df_file(df: pd.DataFrame, path: str, columns: list = None, overwrite: 
         columns: columns to write, default: all
         overwrite: overwrite if file already exists
         **kwargs: keyword arguments for pandas' writing function
+
+    Returns:
+        a boolean telling if a file is written
     """
     if (not overwrite) and os.path.isfile(path):
         logger.info(f'Not writing {path} because it already exists.')
-        return
+        return False
 
     if columns:
         df = df[columns]
@@ -60,6 +63,7 @@ def write_df_file(df: pd.DataFrame, path: str, columns: list = None, overwrite: 
         df.to_excel(path, index=False, **kwargs)
     else:
         raise ValueError('only supports parquet, csv, xlsx')
+    return True
 
 
 def interpolate_numeric_df(df: pd.DataFrame, timestamp_col: str, new_timestamp: np.ndarray) -> pd.DataFrame:

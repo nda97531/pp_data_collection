@@ -4,7 +4,7 @@ This script creates and organises all files needed to open a session in ELAN too
 import pandas as pd
 import os
 from glob import glob
-from pp_data_collection.offline_label.task import Task
+from pp_data_collection.offline_label.elan_task import Task
 
 if __name__ == '__main__':
     root = '/mnt/data_drive/projects/UCD01 - Privacy preserving data collection'
