@@ -300,6 +300,23 @@ class TimerApp(RecordingDevice):
 
     def _read_raw_data(self, input_path: str) -> any:
         df = read_df_file(input_path)
+        # validate df
+        duplicate_start_idx = (df[TimerAppColumn.LABEL.value] == TimerAppColumn.LABEL.value) | \
+                              (df[TimerAppColumn.START_TIMESTAMP.value] == TimerAppColumn.START_TIMESTAMP.value) | \
+                              (df[TimerAppColumn.END_TIMESTAMP.value] == TimerAppColumn.END_TIMESTAMP.value)
+        duplicate_start_idx = np.nonzero(duplicate_start_idx.to_numpy())[0]
+
+        if len(duplicate_start_idx) > 0:
+            assert len(duplicate_start_idx) == 1, 'Unexpected error in Online Label file. Please check.'
+
+            duplicate_start_idx = duplicate_start_idx[0]
+            df_head = df.iloc[:duplicate_start_idx].reset_index(drop=True)
+            df_tail = df.iloc[duplicate_start_idx + 1:].reset_index(drop=True)
+
+            assert df_head.equals(df_tail), 'Unexpected error in Online Label file. Please check.'
+
+            df = df_head
+
         return df
 
     def _add_offset_to_data(self, data: any, offset: int) -> any:
